@@ -21,8 +21,8 @@
 *.pem
 
 # requirements
-requirements/
-
+/requirements/frontend_requirements.md
+requirements/backend_requirements.md
 # debug
 npm-debug.log*
 yarn-debug.log*
