@@ -1,4 +1,12 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Calendar Assistant Application
+
+This is a [Next.js](https://nextjs.org) project for a calendar assistant application.
+
+## Features
+
+- Calendar view with month, week, and day modes
+- Task management integrated with calendar view
+- Styling matching the provided screenshot
 
 ## Getting Started
 
