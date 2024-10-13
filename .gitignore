@@ -21,7 +21,7 @@
 *.pem
 
 # requirements
-/requirements
+requirements/
 
 # debug
 npm-debug.log*
