@@ -16,15 +16,18 @@ enum Priority {
 
 model Project {
   id        Int      @id @default(autoincrement())
-  name      String   @unique
+  userId    String
+  name      String
   tasks     Task[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
 }
 
 model Task {
   id           Int      @id @default(autoincrement())
-  userId       String?
+  userId       String
   taskName     String
   description  String?
   priority     Priority
@@ -37,8 +40,9 @@ model Task {
 }
 
 model Event {
-  id    Int      @id @default(autoincrement())
-  title String
-  start DateTime
-  end   DateTime
+  id     Int      @id @default(autoincrement())
+  userId String
+  title  String
+  start  DateTime
+  end    DateTime
 }

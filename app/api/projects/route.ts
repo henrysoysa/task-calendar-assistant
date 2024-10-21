@@ -1,25 +1,54 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
+import { PrismaClient } from '@prisma/client';
+import { cookies } from 'next/headers';
+import admin from '../../../lib/firebase-admin';
 
-export async function GET() {
+const prisma = new PrismaClient();
+
+export async function GET(req: Request) {
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get('session')?.value;
+
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const projects = await prisma.project.findMany();
+    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
+    const userId = decodedClaims.uid;
+
+    const projects = await prisma.project.findMany({
+      where: { userId: userId },
+    });
     return NextResponse.json(projects);
   } catch (error) {
     console.error('Error fetching projects:', error);
-    return NextResponse.json({ error: 'Error fetching projects' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get('session')?.value;
+
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const body = await request.json();
-    const project = await prisma.project.create({
-      data: { name: body.name },
+    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
+    const userId = decodedClaims.uid;
+
+    const { name } = await request.json();
+    const newProject = await prisma.project.create({
+      data: {
+        name,
+        userId,
+      },
     });
-    return NextResponse.json(project, { status: 201 });
+    return NextResponse.json(newProject);
   } catch (error) {
-    console.error('Error creating project:', error);
-    return NextResponse.json({ error: `Error creating project: ${(error as Error).message}` }, { status: 500 });
+    console.error('Error adding project:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

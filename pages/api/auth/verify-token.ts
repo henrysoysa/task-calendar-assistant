@@ -34,7 +34,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       `session=${sessionCookie}; Max-Age=${expiresIn}; Path=/; HttpOnly; Secure; SameSite=Strict`
     );
 
-    return res.status(200).json({ status: 'success' });
+    // Set another cookie with the user ID
+    res.setHeader(
+      'Set-Cookie',
+      `userId=${decodedToken.uid}; Max-Age=${expiresIn}; Path=/; HttpOnly; Secure; SameSite=Strict`
+    );
+
+    return res.status(200).json({ status: 'success', userId: decodedToken.uid });
   } catch (error) {
     console.error('Error verifying token:', error);
     return res.status(401).json({ error: 'Invalid token' });

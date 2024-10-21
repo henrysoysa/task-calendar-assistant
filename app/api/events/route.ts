@@ -1,69 +1,84 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import * as admin from 'firebase-admin';
-
-console.log('Project ID:', process.env.FIREBASE_PROJECT_ID);
-console.log('Client Email:', process.env.FIREBASE_CLIENT_EMAIL);
-console.log('Private Key Length:', process.env.FIREBASE_PRIVATE_KEY?.length);
+import { cookies } from 'next/headers';
+import admin from '../../../lib/firebase-admin';
 
 const prisma = new PrismaClient();
 
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-    console.log('Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
-}
-
 export async function GET(req: Request) {
-  const token = req.headers.get('Authorization')?.split('Bearer ')[1];
-  if (!token) {
-    return NextResponse.json({ error: 'No token provided' }, { status: 401 });
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get('session')?.value;
+
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    const events = await prisma.task.findMany({
-      where: { userId: decodedToken.uid },
+    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
+    const userId = decodedClaims.uid;
+
+    const tasks = await prisma.task.findMany({
+      where: { userId: userId },
+      include: { project: true },
     });
-    return NextResponse.json(events);
+    return NextResponse.json({ tasks });
   } catch (error) {
-    console.error('Error fetching events:', error);
+    console.error('Error fetching tasks:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const token = request.headers.get('Authorization')?.split('Bearer ')[1];
-  if (!token) {
-    return NextResponse.json({ error: 'No token provided' }, { status: 401 });
+  const cookieStore = cookies();
+  const sessionCookie = cookieStore.get('session')?.value;
+
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    const { taskName, description, priority, projectId, deadline, timeRequired } = await request.json();
-    const newEvent = await prisma.task.create({
-      data: {
-        taskName,
-        description,
-        priority,
-        projectId,
-        deadline,
-        timeRequired,
-        userId: decodedToken.uid,
-      },
-    });
-    return NextResponse.json(newEvent);
+    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
+    const userId = decodedClaims.uid;
+
+    const body = await request.json();
+    if (body.type === 'task') {
+      const { taskName, description, priority, projectId, deadline, timeRequired } = body;
+      
+      // Ensure projectId is a number
+      const projectIdNumber = parseInt(projectId, 10);
+      if (isNaN(projectIdNumber)) {
+        return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+      }
+
+      // Check if the project exists
+      const project = await prisma.project.findUnique({
+        where: { id: projectIdNumber },
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 400 });
+      }
+
+      // Parse the deadline string to a Date object
+      const deadlineDate = new Date(deadline);
+
+      const newTask = await prisma.task.create({
+        data: {
+          taskName,
+          description,
+          priority,
+          projectId: projectIdNumber,
+          deadline: deadlineDate,
+          timeRequired,
+          userId,
+        },
+      });
+      return NextResponse.json(newTask);
+    } else {
+      return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
+    }
   } catch (error) {
-    console.error('Error adding event:', error);
+    console.error('Error adding task:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

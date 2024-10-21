@@ -54,26 +54,64 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onSubmit, onClose }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/tasks', {
+      let projectId: number;
+
+      // If it's a new project or the project doesn't exist, create it
+      if (isNewProject || !projects.includes(formData.project)) {
+        const projectResponse = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: formData.project }),
+        });
+        if (projectResponse.ok) {
+          const newProject = await projectResponse.json();
+          projectId = newProject.id;
+        } else {
+          throw new Error('Failed to create new project');
+        }
+      } else {
+        // If it's an existing project, find its ID
+        const projectResponse = await fetch('/api/projects');
+        if (projectResponse.ok) {
+          const existingProjects = await projectResponse.json();
+          const selectedProject = existingProjects.find((p: any) => p.name === formData.project);
+          if (selectedProject) {
+            projectId = selectedProject.id;
+          } else {
+            throw new Error('Selected project not found');
+          }
+        } else {
+          throw new Error('Failed to fetch projects');
+        }
+      }
+
+      // Convert the deadline to ISO-8601 format
+      const deadline = new Date(formData.deadline).toISOString();
+
+      const response = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
-          userId: 'user1', // This should be replaced with actual user ID when authentication is implemented
+          type: 'task',
+          taskName: formData.taskName,
+          description: formData.description,
+          priority: formData.priority,
+          projectId: projectId,
+          deadline: deadline, // Use the converted deadline
           timeRequired: parseInt(formData.timeRequired, 10)
         }),
       });
       if (response.ok) {
-        const newEvent = await response.json();
-        onSubmit(newEvent);
+        const newItem = await response.json();
+        onSubmit(newItem);
         onClose();
       } else {
         const errorData = await response.json();
-        console.error('Failed to add event:', errorData.error);
+        console.error('Failed to add item:', errorData.error);
         // Show error message to the user
       }
     } catch (error) {
-      console.error('Error adding event:', error);
+      console.error('Error adding item:', error);
       // Show error message to the user
     }
   };

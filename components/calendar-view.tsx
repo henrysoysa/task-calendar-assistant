@@ -27,17 +27,19 @@ const CalendarView: React.FC = () => {
       const response = await fetch('/api/events');
       if (response.ok) {
         const data = await response.json();
-        setEvents(data.map((event: any) => ({
-          id: event.id,
-          title: event.taskName,
-          start: event.deadline,
-          end: new Date(new Date(event.deadline).getTime() + event.timeRequired * 60000),
+        const calendarEvents = data.tasks.map((task: any) => ({
+          id: `task-${task.id}`,
+          title: task.taskName,
+          start: task.deadline,
+          end: new Date(new Date(task.deadline).getTime() + task.timeRequired * 60000),
           extendedProps: {
-            description: event.description,
-            priority: event.priority,
-            project: event.project.name
+            type: 'task',
+            description: task.description,
+            priority: task.priority,
+            project: task.project.name
           }
-        })));
+        }));
+        setEvents(calendarEvents);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
