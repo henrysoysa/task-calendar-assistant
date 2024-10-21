@@ -1,5 +1,5 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,18 +11,7 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-console.log('Firebase Config:', firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
-let app: FirebaseApp;
-let auth: Auth;
-
-const startTime = Date.now();
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  console.log(`Firebase initialized successfully in ${Date.now() - startTime}ms`);
-} catch (error) {
-  console.error('Error initializing Firebase:', error);
-}
-
-export { auth };
+export { app, auth };

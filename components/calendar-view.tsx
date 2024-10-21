@@ -8,14 +8,19 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
+import { useAuth } from '../contexts/AuthContext';
+import SignIn from './SignIn';
 
 const CalendarView: React.FC = () => {
+  const { user, loading } = useAuth();
   const [events, setEvents] = useState<EventInput[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetchEvents();
-  }, [refreshKey]);
+    if (user) {
+      fetchEvents();
+    }
+  }, [user, refreshKey]);
 
   const fetchEvents = async () => {
     try {
@@ -42,6 +47,14 @@ const CalendarView: React.FC = () => {
   const handleEventAdded = () => {
     setRefreshKey(prevKey => prevKey + 1);
   };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <SignIn />;
+  }
 
   return (
     <div className="container mx-auto p-4">

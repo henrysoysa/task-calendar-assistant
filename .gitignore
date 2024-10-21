@@ -41,3 +41,6 @@ next-env.d.ts
 
 # cursor specific files
 .cursorrules
+
+# firebase admin file
+right-hand-cal-firebase-admin.json

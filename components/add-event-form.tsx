@@ -26,7 +26,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onSubmit, onClose }) => {
         const response = await fetch('/api/projects');
         if (response.ok) {
           const data = await response.json();
-          setProjects(data.map(p => p.name));
+          setProjects(data.map((p: { name: string }) => p.name));
         }
       } catch (error) {
         console.error('Error fetching projects:', error);
