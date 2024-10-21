@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Priority } from '@prisma/client';
 
 interface AddEventFormProps {
+  onSubmit: (event: { title: string, date: Date }) => void;
   onClose: () => void;
-  onAddEvent: (event: any) => void;
 }
 
-const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onAddEvent }) => {
+const AddEventForm: React.FC<AddEventFormProps> = ({ onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     taskName: '',
     description: '',
@@ -65,7 +65,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onAddEvent }) => {
       });
       if (response.ok) {
         const newEvent = await response.json();
-        onAddEvent(newEvent);
+        onSubmit(newEvent);
         onClose();
       } else {
         const errorData = await response.json();
@@ -79,7 +79,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onAddEvent }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-lg">
+    <form onSubmit={handleSubmit}>
       <h2 className="text-2xl font-bold mb-4">Add New Task</h2>
       <div className="mb-4">
         <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="taskName">
@@ -199,7 +199,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onAddEvent }) => {
           min="1"
         />
       </div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-6">
         <button
           type="submit"
           className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"

@@ -16,17 +16,23 @@ const AddEventButton: React.FC<AddEventButtonProps> = ({ onEventAdded }) => {
     setIsFormOpen(false);
   };
 
+  const handleClose = () => {
+    setIsFormOpen(false);
+  };
+
   return (
     <>
       <button
         onClick={() => setIsFormOpen(true)}
-        className="w-full bg-black text-white py-2 rounded-md mb-8 hover:bg-gray-800 transition-colors"
+        className="bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors"
       >
         + Add Event
       </button>
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <AddEventForm onClose={() => setIsFormOpen(false)} onAddEvent={handleAddEvent} />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <AddEventForm onClose={handleClose} onSubmit={handleAddEvent} />
+          </div>
         </div>
       )}
     </>

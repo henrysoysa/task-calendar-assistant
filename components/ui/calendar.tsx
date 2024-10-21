@@ -9,12 +9,10 @@ import { buttonVariants } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
-function Calendar({
-  className,
-  classNames,
-  showOutsideDays = true,
-  ...props
-}: CalendarProps) {
+const Calendar = React.forwardRef<HTMLDivElement, CalendarProps>((
+  { className, classNames, showOutsideDays = true, ...props },
+  ref
+) => {
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
@@ -64,9 +62,10 @@ function Calendar({
         IconRight: ({ ...props }) => <ChevronRightIcon className="h-4 w-4" />,
       }}
       {...props}
+      ref={ref}
     />
   )
-}
+})
 Calendar.displayName = "Calendar"
 
 export { Calendar }

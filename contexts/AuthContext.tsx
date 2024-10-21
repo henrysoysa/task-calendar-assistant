@@ -14,20 +14,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider: Setting up auth state listener');
+    console.log('AuthProvider: useEffect started');
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('AuthProvider: Auth state changed', user);
+      console.log('Auth state changed:', user); // Log user state
       setUser(user);
       setLoading(false);
+      console.log('Loading set to false, user:', user);
     });
 
-    return () => {
-      console.log('AuthProvider: Unsubscribing from auth state listener');
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  console.log('AuthProvider: Rendering', { user, loading });
+  console.log('AuthProvider: Rendering', { user: user ? 'User exists' : 'No user', loading });
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
@@ -36,4 +34,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  console.log('useAuth called:', { user: context.user ? 'User exists' : 'No user', loading: context.loading });
+  return context;
+};

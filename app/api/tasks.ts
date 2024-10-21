@@ -7,7 +7,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const tasks = await prisma.task.findMany()
       res.status(200).json(tasks)
     } catch (error) {
-      res.status(500).json({ error: 'Error fetching tasks' })
+      console.error('Error fetching tasks:', error);
+      return new Response(JSON.stringify({ message: 'Error fetching tasks' }), { status: 500 });
     }
   } else if (req.method === 'POST') {
     try {
@@ -16,7 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
       res.status(201).json(task)
     } catch (error) {
-      res.status(500).json({ error: 'Error creating task' })
+      console.error('Error creating task:', error);
+      return new Response(JSON.stringify({ message: 'Error creating task' }), { status: 500 });
     }
   } else {
     res.setHeader('Allow', ['GET', 'POST'])

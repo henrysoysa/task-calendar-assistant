@@ -7,7 +7,9 @@ const SignIn: React.FC = () => {
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      console.log('Sign-in successful:', result.user);
+      // The AuthContext will handle the state update
     } catch (error) {
       console.error('Error signing in with Google', error);
     }

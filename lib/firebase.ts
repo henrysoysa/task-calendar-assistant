@@ -16,10 +16,11 @@ console.log('Firebase Config:', firebaseConfig);
 let app: FirebaseApp;
 let auth: Auth;
 
+const startTime = Date.now();
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-  console.log('Firebase initialized successfully');
+  console.log(`Firebase initialized successfully in ${Date.now() - startTime}ms`);
 } catch (error) {
   console.error('Error initializing Firebase:', error);
 }
