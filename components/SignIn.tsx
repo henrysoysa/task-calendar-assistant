@@ -12,7 +12,7 @@ const SignIn: React.FC = () => {
     try {
       console.log("Attempting to login...");
       await login();
-      console.log("Login successful");
+      console.log("Login function completed");
     } catch (error) {
       console.error('Error signing in:', error);
     }

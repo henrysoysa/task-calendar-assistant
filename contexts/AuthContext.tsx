@@ -23,7 +23,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(user);
       setLoading(false);
       if (user) {
-        router.push('/'); // Redirect to home page when user is authenticated
+        console.log("User authenticated, redirecting to home");
+        router.push('/');
       }
     });
 
@@ -40,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const idToken = await result.user.getIdToken();
       
       console.log("Sending token to backend");
-      console.log("token = ", idToken);
+      console.log("Token length:", idToken.length);
       const response = await fetch('/api/auth/verify-token', {
         method: 'POST',
         headers: {
@@ -51,9 +52,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (response.ok) {
         console.log("Token verified successfully");
-        router.push('/'); // Redirect to home page after successful token verification
+        const data = await response.json();
+        console.log("Response data:", data);
+        router.push('/');
       } else {
-        console.error('Failed to create session');
+        console.error('Failed to create session', await response.text());
       }
     } catch (error) {
       console.error('Error signing in with Google', error);
