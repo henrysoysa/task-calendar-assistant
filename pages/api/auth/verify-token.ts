@@ -29,6 +29,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     console.log('Attempting to verify token');
+    console.log('Project ID:', process.env.FIREBASE_PROJECT_ID);
+    console.log('Client Email:', process.env.FIREBASE_CLIENT_EMAIL);
+    console.log('Private Key length:', process.env.FIREBASE_PRIVATE_KEY?.length);
+    
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     console.log('Token verified successfully', decodedToken);
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
