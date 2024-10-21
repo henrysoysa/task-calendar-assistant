@@ -28,7 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    console.log('Attempting to verify token');
     const decodedToken = await admin.auth().verifyIdToken(idToken);
+    console.log('Token verified successfully', decodedToken);
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
     const sessionCookie = await admin.auth().createSessionCookie(idToken, { expiresIn });
 
