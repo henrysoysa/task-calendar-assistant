@@ -41,7 +41,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const idToken = await result.user.getIdToken();
       
       console.log("Sending token to backend");
-      console.log("Token length:", idToken.length);
+      console.log("Token:", idToken);
+      console.log("JSON Token pre: ", JSON.stringify({ idToken }))
       const response = await fetch('/api/auth/verify-token', {
         method: 'POST',
         headers: {
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify({ idToken }),
       });
+      console.log("JSON Token post: ", JSON.stringify({ idToken }));
 
       if (response.ok) {
         console.log("Token verified successfully");
