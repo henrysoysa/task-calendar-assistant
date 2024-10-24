@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import * as admin from 'firebase-admin';
+import { serialize } from 'cookie';
 
 // Initialize Firebase Admin SDK
 const initializeFirebaseAdmin = () => {
@@ -26,10 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { idToken } = req.body;
+  const { idToken, csrfToken } = req.body;
 
-  if (!idToken) {
-    return res.status(400).json({ error: 'No ID token provided' });
+  if (!idToken || !csrfToken) {
+    return res.status(400).json({ error: 'No ID token or CSRF token provided' });
+  }
+
+  // Guard against CSRF attacks
+  if (csrfToken !== req.cookies.csrfToken) {
+    return res.status(401).json({ error: 'UNAUTHORIZED REQUEST!' });
   }
 
   try {
@@ -48,9 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Token verified successfully', decodedToken);
     
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
-    console.log("Creating session cookie")
-    const sessionCookie = await adminSDK.auth().createSessionCookie(idToken, { expiresIn });
-    console.log("Session Cookie: ", sessionCookie, "Expires in: ",expiresIn)
+    console.log('Creating session cookie');
+    const sessionCookie = await adminSDK.auth().createSessionCookie(idToken.toString(), { expiresIn });
+    console.log('Session Cookie created');
 
     res.setHeader(
       'Set-Cookie',
