@@ -27,15 +27,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { idToken, csrfToken } = req.body;
+  const { idToken } = req.body;
 
-  if (!idToken || !csrfToken) {
-    return res.status(400).json({ error: 'No ID token or CSRF token provided' });
-  }
-
-  // Guard against CSRF attacks
-  if (csrfToken !== req.cookies.csrfToken) {
-    return res.status(401).json({ error: 'UNAUTHORIZED REQUEST!' });
+  if (!idToken) {
+    return res.status(400).json({ error: 'No ID token provided' });
   }
 
   try {
