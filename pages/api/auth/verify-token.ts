@@ -48,12 +48,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Token verified successfully', decodedToken);
     
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
+    console.log("Creating session cookie")
     const sessionCookie = await adminSDK.auth().createSessionCookie(idToken, { expiresIn });
+    console.log("Session Cookie: ", sessionCookie, "Expires in: ",expiresIn)
 
     res.setHeader(
       'Set-Cookie',
       `session=${sessionCookie}; Max-Age=${expiresIn}; Path=/; HttpOnly; Secure; SameSite=Strict`
     );
+    console.log("setting cookie in header")
 
     return res.status(200).json({ status: 'success', userId: decodedToken.uid });
   } catch (error) {
