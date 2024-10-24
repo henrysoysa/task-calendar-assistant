@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import admin from '../../../lib/firebase-admin';
-import { prisma } from '../../../lib/prisma';
+import { db } from '../../../lib/firestore';
 
 export async function GET(req: Request) {
   const cookieStore = cookies();
@@ -15,10 +15,9 @@ export async function GET(req: Request) {
     const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
     const userId = decodedClaims.uid;
 
-    const tasks = await prisma.task.findMany({
-      where: { userId: userId },
-      include: { project: true },
-    });
+    const tasksSnapshot = await db.collection('tasks').where('userId', '==', userId).get();
+    const tasks = tasksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     return NextResponse.json({ tasks });
   } catch (error) {
     console.error('Error fetching tasks:', error);

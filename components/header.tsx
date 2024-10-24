@@ -1,10 +1,10 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContext';
 import SignIn from './SignIn';
 import SignOut from './SignOut';
 
 const Header: React.FC = () => {
-    const { user, loading } = useAuth();
+    const { user, loading } = useAuthContext();
 
     return (
         <header>

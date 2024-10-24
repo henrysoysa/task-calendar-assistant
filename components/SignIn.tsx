@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { Button } from './ui/button';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContext';
 
 const SignIn: React.FC = () => {
-  const { login } = useAuth();
+  const { login } = useAuthContext();
 
   const handleSignIn = async () => {
     console.log("Sign in button clicked");

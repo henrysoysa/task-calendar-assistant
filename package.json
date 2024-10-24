@@ -11,6 +11,7 @@
     "vercel-build": "prisma generate && prisma db push && next build"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.0.2",
     "@fullcalendar/core": "^6.1.15",
     "@fullcalendar/daygrid": "^6.1.15",
     "@fullcalendar/interaction": "^6.1.15",

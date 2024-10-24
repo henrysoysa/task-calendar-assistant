@@ -16,7 +16,7 @@ const initializeFirebaseAdmin = () => {
       console.log('Firebase Admin initialized successfully');
     } catch (error) {
       console.error('Error initializing Firebase Admin:', error);
-      throw error; // Rethrow the error to be caught in the handler
+      throw error;
     }
   }
   return admin;
@@ -27,10 +27,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { idToken } = req.body;
+  const { idToken, csrfToken } = req.body;
 
-  if (!idToken) {
-    return res.status(400).json({ error: 'No ID token provided' });
+  if (!idToken || !csrfToken) {
+    return res.status(400).json({ error: 'No ID token or CSRF token provided' });
+  }
+
+  // Guard against CSRF attacks
+  if (csrfToken !== req.cookies.csrfToken) {
+    return res.status(401).json({ error: 'UNAUTHORIZED REQUEST!' });
   }
 
   try {
@@ -38,31 +43,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminSDK = initializeFirebaseAdmin();
     
     console.log('Attempting to verify token');
-    console.log('Project ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-    console.log('Client Email:', process.env.FIREBASE_CLIENT_EMAIL);
-    console.log('Private Key length:', process.env.FIREBASE_PRIVATE_KEY);
-    
-    console.log("JSON Token post: ", idToken );
-
     const decodedToken = await adminSDK.auth().verifyIdToken(idToken);
-    console.log("decodedToken: ", decodedToken)
     console.log('Token verified successfully', decodedToken);
     
-    const expiresIn = 60 * 60 * 24 * 6 * 1000; // 6 days
+    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
     console.log('Creating session cookie');
-    try {
-      const sessionCookie = await adminSDK.auth().createSessionCookie(idToken.toString(), { expiresIn });
-      console.log('Session Cookie created');
+    const sessionCookie = await adminSDK.auth().createSessionCookie(idToken, { expiresIn });
+    console.log('Session Cookie created');
 
-      res.setHeader(
-        'Set-Cookie',
-        `session=${sessionCookie}; Max-Age=${expiresIn}; Path=/; HttpOnly; Secure; SameSite=Strict`
-      );
-      console.log("setting cookie in header");
-    } catch (error) {
-      console.error('Error creating session cookie:', error);
-      res.status(401).send('Unauthorized');
-    }
+    // Set cookie policy for session cookie
+    const options = { maxAge: expiresIn, httpOnly: true, secure: true, path: '/', sameSite: 'strict' };
+    res.setHeader('Set-Cookie', serialize('session', sessionCookie, options));
 
     return res.status(200).json({ status: 'success', userId: decodedToken.uid });
   } catch (error) {
