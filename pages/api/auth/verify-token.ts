@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminSDK = initializeFirebaseAdmin();
     
     console.log('Attempting to verify token');
-    console.log('Project ID:', process.env.FIREBASE_PROJECT_ID);
+    console.log('Project ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
     console.log('Client Email:', process.env.FIREBASE_CLIENT_EMAIL);
     console.log('Private Key length:', process.env.FIREBASE_PRIVATE_KEY?.length);
     
