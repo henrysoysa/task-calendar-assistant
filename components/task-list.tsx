@@ -2,27 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
+import { useAuthContext } from '../contexts/AuthContext';
 
 interface Task {
   id: number;
   taskName: string;
   description: string | null;
   priority: string;
-  project: { name: string };
+  project: { name: string } | null;
   deadline: string;
   timeRequired: number;
 }
 
 interface TaskListProps {
-  refreshKey: number;
+  refreshTrigger?: number;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ refreshKey }) => {
+const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0 }) => {
+  const { userId } = useAuthContext();
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    fetchTasks();
-  }, [refreshKey]);
+    if (userId) {
+      fetchTasks();
+    }
+  }, [userId, refreshTrigger]); // Add refreshTrigger to dependency array
 
   const fetchTasks = async () => {
     try {
@@ -49,7 +53,7 @@ const TaskList: React.FC<TaskListProps> = ({ refreshKey }) => {
             <li key={task.id} className="mb-2 p-2 border rounded">
               <div className="font-semibold">{task.taskName}</div>
               <div className="text-sm text-gray-600">
-                Project: {task.project.name} | Priority: {task.priority}
+                Project: {task.project?.name || 'No Project'} | Priority: {task.priority}
               </div>
               <div className="text-sm">
                 Deadline: {format(new Date(task.deadline), 'PPp')}

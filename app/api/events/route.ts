@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import admin from '../../../lib/firebase-admin';
-import { db } from '../../../lib/firestore';
+import { prisma } from '../../../lib/prisma';
+import { getAuth } from '@clerk/nextjs/server';
 
 export async function GET(req: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+  const { userId } = getAuth(req);
 
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
-    const tasksSnapshot = await db.collection('tasks').where('userId', '==', userId).get();
-    const tasks = tasksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
+    const tasks = await prisma.task.findMany({
+      where: { userId: userId },
+    });
     return NextResponse.json({ tasks });
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -26,56 +21,23 @@ export async function GET(req: Request) {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+  const { userId } = getAuth(request);
 
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
     const body = await request.json();
-    if (body.type === 'task') {
-      const { taskName, description, priority, projectId, deadline, timeRequired } = body;
-      
-      // Ensure projectId is a number
-      const projectIdNumber = parseInt(projectId, 10);
-      if (isNaN(projectIdNumber)) {
-        return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
-      }
-
-      // Check if the project exists
-      const project = await prisma.project.findUnique({
-        where: { id: projectIdNumber },
-      });
-
-      if (!project) {
-        return NextResponse.json({ error: 'Project not found' }, { status: 400 });
-      }
-
-      // Parse the deadline string to a Date object
-      const deadlineDate = new Date(deadline);
-
-      const newTask = await prisma.task.create({
-        data: {
-          taskName,
-          description,
-          priority,
-          projectId: projectIdNumber,
-          deadline: deadlineDate,
-          timeRequired,
-          userId,
-        },
-      });
-      return NextResponse.json(newTask);
-    } else {
-      return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
-    }
+    const newTask = await prisma.task.create({
+      data: {
+        ...body,
+        userId,
+      },
+    });
+    return NextResponse.json(newTask);
   } catch (error) {
-    console.error('Error adding task:', error);
+    console.error('Error creating task:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

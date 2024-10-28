@@ -9,12 +9,46 @@ import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
 import { useAuthContext } from '../contexts/AuthContext';
-import SignIn from './SignIn';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
+  const [events, setEvents] = useState<EventInput[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  console.log("CalendarView - userId:", userId, "loading:", loading);
+  useEffect(() => {
+    if (userId) {
+      fetchTasks();
+    }
+  }, [userId, refreshKey]);
+
+  const fetchTasks = async () => {
+    try {
+      const response = await fetch('/api/tasks');
+      if (response.ok) {
+        const tasks = await response.json();
+        const calendarEvents = tasks.map((task: any) => ({
+          id: task.id,
+          title: task.taskName,
+          start: task.deadline,
+          end: new Date(new Date(task.deadline).getTime() + task.timeRequired * 60000),
+          extendedProps: {
+            description: task.description,
+            priority: task.priority,
+            projectId: task.projectId,
+          },
+        }));
+        setEvents(calendarEvents);
+      } else {
+        console.error('Failed to fetch tasks');
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
+
+  const handleTaskAdded = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -27,25 +61,20 @@ const CalendarView: React.FC = () => {
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex justify-end">
-        <AddEventButton />
+        <AddEventButton onEventAdded={handleTaskAdded} />
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            }}
-            height="auto"
-          />
-        </div>
-        <div>
-          <TaskList />
-        </div>
-      </div>
+      <FullCalendar
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        events={events}
+        headerToolbar={{
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay',
+        }}
+        height="auto"
+      />
+      <TaskList refreshTrigger={refreshKey} />
     </div>
   );
 };

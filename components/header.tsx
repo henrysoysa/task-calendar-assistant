@@ -4,14 +4,14 @@ import SignIn from './SignIn';
 import SignOut from './SignOut';
 
 const Header: React.FC = () => {
-    const { user, loading } = useAuthContext();
+    const { userId, loading } = useAuthContext();
 
     return (
         <header>
             {/* Your existing header content */}
             {!loading && (
                 <>
-                    {user ? <SignOut /> : <SignIn />}
+                    {userId ? <SignOut /> : <SignIn />}
                 </>
             )}
         </header>

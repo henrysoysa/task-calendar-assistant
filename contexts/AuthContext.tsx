@@ -1,16 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@clerk/nextjs';
+import { useUser, useSignIn } from '@clerk/nextjs';
 
 interface AuthContextType {
   userId: string | null;
   loading: boolean;
+  login: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ userId: null, loading: true });
+const AuthContext = createContext<AuthContextType>({ userId: null, loading: true, login: async () => {} });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoaded } = useUser();
+  const { signIn } = useSignIn();
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -25,12 +27,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, isLoaded, router]);
 
+  const login = async () => {
+    try {
+      await signIn();
+      console.log("User signed in successfully");
+    } catch (error) {
+      console.error("Error signing in:", error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ userId, loading: !isLoaded }}>
+    <AuthContext.Provider value={{ userId, loading: !isLoaded, login }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Rename the custom hook to avoid conflict with Clerk's useAuth
 export const useAuthContext = () => useContext(AuthContext);

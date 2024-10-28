@@ -5,7 +5,7 @@ import CalendarView from '../components/calendar-view';
 import { useAuthContext } from '../contexts/AuthContext';
 
 export default function Home() {
-  const { user, loading } = useAuthContext();
+  const { userId, loading } = useAuthContext();
 
   if (loading) {
     return <div>Loading...</div>;

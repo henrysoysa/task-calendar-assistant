@@ -12,6 +12,9 @@ export async function GET(req: Request) {
   try {
     const tasks = await prisma.task.findMany({
       where: { userId: userId },
+      include: {
+        project: true, // Include the project relation
+      },
     });
     return NextResponse.json(tasks);
   } catch (error) {
@@ -31,7 +34,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const newTask = await prisma.task.create({
       data: {
-        ...body,
+        taskName: body.taskName,
+        description: body.description,
+        priority: body.priority,
+        projectId: body.projectId,
+        deadline: new Date(body.deadline),
+        timeRequired: body.timeRequired,
         userId,
       },
     });

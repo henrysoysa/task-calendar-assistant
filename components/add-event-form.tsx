@@ -88,7 +88,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onSubmit, onClose }) => {
       // Convert the deadline to ISO-8601 format
       const deadline = new Date(formData.deadline).toISOString();
 
-      const response = await fetch('/api/events', {
+      const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
