@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    runtime: 'nodejs',
+  },
   env: {
     // Remove all Firebase-related environment variables
   },
