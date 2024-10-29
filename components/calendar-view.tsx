@@ -9,6 +9,7 @@ import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
 import { useAuthContext } from '../contexts/AuthContext';
+import SignIn from './SignIn';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
@@ -19,7 +20,7 @@ const CalendarView: React.FC = () => {
     if (userId) {
       fetchTasks();
     }
-  }, [userId, refreshKey]);
+  }, [userId]);
 
   const fetchTasks = async () => {
     try {
@@ -46,22 +47,18 @@ const CalendarView: React.FC = () => {
     }
   };
 
-  const handleTaskAdded = () => {
-    setRefreshKey(prev => prev + 1);
-  };
-
   if (loading) {
     return <div>Loading...</div>;
   }
 
   if (!userId) {
-    return <div>Please sign in to view your calendar.</div>;
+    return <SignIn />;
   }
 
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex justify-end">
-        <AddEventButton onEventAdded={handleTaskAdded} />
+        <AddEventButton onEventAdded={fetchTasks} />
       </div>
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}

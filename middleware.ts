@@ -1,12 +1,20 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { withClerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default clerkMiddleware();
+export default withClerkMiddleware((req: NextRequest) => {
+  return NextResponse.next();
+});
 
+// Stop Middleware running on static files
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next
+     * - static (static files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!_next|static|favicon.ico).*)",
   ],
 };
