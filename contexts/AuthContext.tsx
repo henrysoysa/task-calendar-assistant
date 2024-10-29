@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signIn.create({
         strategy: "oauth_google",
         redirectUrl: "/",
-        redirectUrlComplete: "/"
+        actionCompleteRedirectUrl: "/"
       });
       
       console.log("User signed in successfully");
