@@ -29,7 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => {
     try {
-      await signIn.create();
+      if (!signIn) {
+        throw new Error("Sign in is not available");
+      }
+      
+      await signIn.create({
+        strategy: "oauth_google",
+        redirectUrl: "/",
+        redirectUrlComplete: "/"
+      });
+      
       console.log("User signed in successfully");
     } catch (error) {
       console.error("Error signing in:", error);
