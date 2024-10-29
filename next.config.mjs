@@ -5,7 +5,8 @@ const nextConfig = {
     runtime: 'nodejs',
   },
   env: {
-    // Remove all Firebase-related environment variables
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
   },
   webpack: (config, { isServer }) => {
     if (isServer) {

@@ -15,7 +15,7 @@
     "@fullcalendar/core": "^6.1.8",
     "@fullcalendar/daygrid": "^6.1.8",
     "@fullcalendar/interaction": "^6.1.8",
-    "@fullcalendar/react": "^6.1.8",
+    "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.8",
     "@prisma/client": "^5.0.0",
     "@radix-ui/react-checkbox": "^1.1.2",
