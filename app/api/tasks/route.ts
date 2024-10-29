@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/prisma';
 import { getAuth } from '@clerk/nextjs/server';
+import { NextRequest } from 'next/server';
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const { userId } = getAuth(req);
 
   if (!userId) {
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { userId } = getAuth(request);
 
   if (!userId) {
