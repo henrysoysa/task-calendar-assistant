@@ -29,7 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => {
     try {
-      await signIn();
+      await signIn.create();
       console.log("User signed in successfully");
     } catch (error) {
       console.error("Error signing in:", error);
