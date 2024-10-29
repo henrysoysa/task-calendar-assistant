@@ -3,6 +3,7 @@
 import localFont from "next/font/local";
 import "./globals.css";
 import Header from "components/header";
+import Footer from "components/footer";
 import {
   ClerkProvider,
   SignInButton,
@@ -37,13 +38,16 @@ export default function RootLayout({
             className={`${geistSans.variable} ${geistMono.variable} antialiased`}
           >
             <Header />
-            <SignedOut>
-              <SignInButton />
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-            {children}
+            <main className="flex-grow">
+              <SignedOut>
+                <SignInButton />
+              </SignedOut>
+              <SignedIn>
+                <UserButton />
+              </SignedIn>
+              {children}
+            </main>
+            <Footer />
           </body>
         </html>
       </AuthProvider>
