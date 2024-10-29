@@ -2,10 +2,10 @@
 
 import React from 'react';
 import CalendarView from '../components/calendar-view';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContext';
 
 export default function Home() {
-  const { user, loading } = useAuth();
+  const { userId, loading } = useAuthContext();
 
   if (loading) {
     return <div>Loading...</div>;

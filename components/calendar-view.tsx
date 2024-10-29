@@ -8,79 +8,73 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
-import { useAuth } from '../contexts/AuthContext';
-import SignIn from './SignIn';
+import { useAuthContext } from '../contexts/AuthContext';
 
 const CalendarView: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { userId, loading } = useAuthContext();
   const [events, setEvents] = useState<EventInput[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      fetchEvents();
+    if (userId) {
+      fetchTasks();
     }
-  }, [user, refreshKey]);
+  }, [userId, refreshKey]);
 
-  const fetchEvents = async () => {
+  const fetchTasks = async () => {
     try {
-      const response = await fetch('/api/events');
+      const response = await fetch('/api/tasks');
       if (response.ok) {
-        const data = await response.json();
-        const calendarEvents = data.tasks.map((task: any) => ({
-          id: `task-${task.id}`,
+        const tasks = await response.json();
+        const calendarEvents = tasks.map((task: any) => ({
+          id: task.id,
           title: task.taskName,
           start: task.deadline,
           end: new Date(new Date(task.deadline).getTime() + task.timeRequired * 60000),
           extendedProps: {
-            type: 'task',
             description: task.description,
             priority: task.priority,
-            project: task.project.name
-          }
+            projectId: task.projectId,
+          },
         }));
         setEvents(calendarEvents);
+      } else {
+        console.error('Failed to fetch tasks');
       }
     } catch (error) {
-      console.error('Error fetching events:', error);
+      console.error('Error fetching tasks:', error);
     }
   };
 
-  const handleEventAdded = () => {
-    setRefreshKey(prevKey => prevKey + 1);
+  const handleTaskAdded = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   if (loading) {
     return <div>Loading...</div>;
   }
 
-  if (!user) {
-    return <SignIn />;
+  if (!userId) {
+    return <div>Please sign in to view your calendar.</div>;
   }
 
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex justify-end">
-        <AddEventButton onEventAdded={handleEventAdded} />
+        <AddEventButton onEventAdded={handleTaskAdded} />
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
-            events={events}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            }}
-            height="auto"
-          />
-        </div>
-        <div>
-          <TaskList refreshKey={refreshKey} />
-        </div>
-      </div>
+      <FullCalendar
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        events={events}
+        headerToolbar={{
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay',
+        }}
+        height="auto"
+      />
+      <TaskList refreshTrigger={refreshKey} />
     </div>
   );
 };

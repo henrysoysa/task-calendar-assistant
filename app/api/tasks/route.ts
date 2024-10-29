@@ -1,23 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/prisma';
-import { cookies } from 'next/headers';
-import admin from '../../../lib/firebase-admin';
+import { getAuth } from '@clerk/nextjs/server';
+import { NextRequest } from 'next/server';
 
-export async function GET(req: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+export async function GET(req: NextRequest) {
+  const { userId } = getAuth(req);
 
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
     const tasks = await prisma.task.findMany({
       where: { userId: userId },
-      include: { project: true },
+      include: {
+        project: true, // Include the project relation
+      },
     });
     return NextResponse.json(tasks);
   } catch (error) {
@@ -26,49 +24,27 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+export async function POST(request: NextRequest) {
+  const { userId } = getAuth(request);
 
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
     const body = await request.json();
-
-    let project = await prisma.project.findFirst({
-      where: { 
-        name: body.project,
-        userId: userId
-      },
-    });
-
-    if (!project) {
-      project = await prisma.project.create({
-        data: {
-          name: body.project,
-          userId: userId,
-        },
-      });
-    }
-
-    const task = await prisma.task.create({
+    const newTask = await prisma.task.create({
       data: {
         taskName: body.taskName,
         description: body.description,
         priority: body.priority,
-        projectId: project.id,
+        projectId: body.projectId,
         deadline: new Date(body.deadline),
         timeRequired: body.timeRequired,
-        userId: userId,
+        userId,
       },
     });
-
-    return NextResponse.json(task);
+    return NextResponse.json(newTask);
   } catch (error) {
     console.error('Error creating task:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

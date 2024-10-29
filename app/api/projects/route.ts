@@ -1,22 +1,16 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { cookies } from 'next/headers';
-import admin from '../../../lib/firebase-admin';
+import { prisma } from '../../../lib/prisma';
+import { getAuth } from '@clerk/nextjs/server';
+import { NextRequest } from 'next/server';
 
-const prisma = new PrismaClient();
+export async function GET(req: NextRequest) {
+  const { userId } = getAuth(req);
 
-export async function GET(req: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
-
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
     const projects = await prisma.project.findMany({
       where: { userId: userId },
     });
@@ -27,19 +21,30 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  const cookieStore = cookies();
-  const sessionCookie = cookieStore.get('session')?.value;
+export async function POST(request: NextRequest) {
+  const { userId } = getAuth(request);
 
-  if (!sessionCookie) {
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const decodedClaims = await admin.auth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedClaims.uid;
-
     const { name } = await request.json();
+
+    // Check if the project already exists
+    const existingProject = await prisma.project.findUnique({
+      where: {
+        userId_name: {
+          userId,
+          name,
+        },
+      },
+    });
+
+    if (existingProject) {
+      return NextResponse.json({ error: 'Project already exists' }, { status: 400 });
+    }
+
     const newProject = await prisma.project.create({
       data: {
         name,

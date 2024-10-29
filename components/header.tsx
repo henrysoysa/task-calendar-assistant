@@ -1,17 +1,17 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuthContext } from '../contexts/AuthContext';
 import SignIn from './SignIn';
 import SignOut from './SignOut';
 
 const Header: React.FC = () => {
-    const { user, loading } = useAuth();
+    const { userId, loading } = useAuthContext();
 
     return (
         <header>
             {/* Your existing header content */}
             {!loading && (
                 <>
-                    {user ? <SignOut /> : <SignIn />}
+                    {userId ? <SignOut /> : <SignIn />}
                 </>
             )}
         </header>
