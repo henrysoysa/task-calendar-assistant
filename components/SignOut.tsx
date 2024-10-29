@@ -1,10 +1,20 @@
 import React from 'react';
-import { auth } from '../lib/firebase';
+import { useClerk } from '@clerk/nextjs';
 import { Button } from './ui/button';
 
 const SignOut: React.FC = () => {
+  const { signOut } = useClerk();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
-    <Button onClick={() => auth.signOut()}>
+    <Button onClick={handleSignOut}>
       Sign Out
     </Button>
   );
