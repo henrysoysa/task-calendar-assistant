@@ -123,7 +123,9 @@ const CalendarView: React.FC = () => {
           right: 'dayGridMonth,timeGridWeek,timeGridDay'
         }}
         height="auto"
-        className={windowWidth <= 620 ? 'mobile-calendar' : ''}
+        classNames={{
+          view: windowWidth <= 620 ? 'mobile-calendar' : ''
+        }}
       />
       <TaskList refreshTrigger={refreshKey} />
     </div>
