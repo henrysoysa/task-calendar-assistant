@@ -11,10 +11,22 @@ export default function Home() {
     return <div>Loading...</div>;
   }
 
-  return (
-    <main>
-      <h1 className="text-2xl font-bold mb-4">Welcome to the Calendar Assistant</h1>
-      <CalendarView />
-    </main>
-  );
+  if (!userId) {
+    return (
+    <div>
+    <h3>Welcome to the Calendar Assistant. Sign in to view the application.</h3>
+    </div>
+    );
+  }
+
+  if (userId) {
+    return (
+      <main>
+        <h3 className="text-2xl font-bold mb-4">Your Calendar Assistant</h3>
+        <CalendarView />
+      </main>
+    );
+  }
+
+
 }

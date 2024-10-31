@@ -9,7 +9,6 @@ import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
 import { useAuthContext } from '../contexts/AuthContext';
-import SignIn from './SignIn';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
@@ -49,10 +48,6 @@ const CalendarView: React.FC = () => {
 
   if (loading) {
     return <div>Loading...</div>;
-  }
-
-  if (!userId) {
-    return <SignIn />;
   }
 
   return (

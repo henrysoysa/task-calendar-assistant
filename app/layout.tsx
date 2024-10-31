@@ -1,17 +1,10 @@
-"use client"; // Mark this component as a Client Component
+"use client";
 
 import localFont from "next/font/local";
 import "./globals.css";
 import Header from "components/header";
 import Footer from "components/footer";
-import {
-  ClerkProvider,
-  SignInButton,
-  SignedIn,
-  SignedOut,
-  UserButton
-} from '@clerk/nextjs'
-import './globals.css'
+import { ClerkProvider } from '@clerk/nextjs';
 import { AuthProvider } from '../contexts/AuthContext';
 
 const geistSans = localFont({
@@ -34,17 +27,9 @@ export default function RootLayout({
     <ClerkProvider>
       <AuthProvider>
         <html lang="en">
-          <body
-            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-          >
+          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
             <Header />
-            <main className="flex-grow">
-              <SignedOut>
-                <SignInButton />
-              </SignedOut>
-              <SignedIn>
-                <UserButton />
-              </SignedIn>
+            <main className="flex-grow container mx-auto px-4 py-8">
               {children}
             </main>
             <Footer />
