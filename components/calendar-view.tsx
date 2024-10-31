@@ -109,24 +109,23 @@ const CalendarView: React.FC = () => {
         <AddEventButton onEventAdded={fetchTasks} />
         {windowWidth <= 620 && renderViewSelector()}
       </div>
-      <FullCalendar
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView={currentView}
-        events={events}
-        headerToolbar={windowWidth <= 620 ? {
-          left: 'title',
-          center: '',
-          right: 'prev,next,today'
-        } : {
-          left: 'prev,next today',
-          center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay'
-        }}
-        height="auto"
-        classNames={{
-          view: windowWidth <= 620 ? 'mobile-calendar' : ''
-        }}
-      />
+      <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView={currentView}
+          events={events}
+          headerToolbar={windowWidth <= 620 ? {
+            left: 'title',
+            center: '',
+            right: 'prev,next,today'
+          } : {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          }}
+          height="auto"
+        />
+      </div>
       <TaskList refreshTrigger={refreshKey} />
     </div>
   );
