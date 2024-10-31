@@ -111,8 +111,7 @@ const CalendarView: React.FC = () => {
       </div>
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        view={currentView}
+        initialView={currentView}
         events={events}
         headerToolbar={windowWidth <= 620 ? {
           left: 'title',
