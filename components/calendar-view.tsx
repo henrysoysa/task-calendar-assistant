@@ -9,11 +9,32 @@ import { EventInput } from '@fullcalendar/core';
 import AddEventButton from './add-event-button';
 import TaskList from './task-list';
 import { useAuthContext } from '../contexts/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Button } from './ui/button';
+import { ChevronDown } from 'lucide-react';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
   const [events, setEvents] = useState<EventInput[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currentView, setCurrentView] = useState('dayGridMonth');
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== 'undefined' ? window.innerWidth : 0
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (userId) {
@@ -46,25 +67,64 @@ const CalendarView: React.FC = () => {
     }
   };
 
+  const handleViewChange = (view: string) => {
+    setCurrentView(view);
+  };
+
+  const renderViewSelector = () => {
+    if (windowWidth <= 620) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-[130px]">
+              {currentView === 'dayGridMonth' ? 'Month' : 
+               currentView === 'timeGridWeek' ? 'Week' : 'Day'}
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={() => handleViewChange('dayGridMonth')}>
+              Month
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleViewChange('timeGridWeek')}>
+              Week
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleViewChange('timeGridDay')}>
+              Day
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+    return null;
+  };
+
   if (loading) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="container mx-auto p-4">
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex flex-col sm:flex-row sm:justify-end gap-2">
         <AddEventButton onEventAdded={fetchTasks} />
+        {windowWidth <= 620 && renderViewSelector()}
       </div>
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
+        view={currentView}
         events={events}
-        headerToolbar={{
+        headerToolbar={windowWidth <= 620 ? {
+          left: 'title',
+          center: '',
+          right: 'prev,next,today'
+        } : {
           left: 'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
         }}
         height="auto"
+        className={windowWidth <= 620 ? 'mobile-calendar' : ''}
       />
       <TaskList refreshTrigger={refreshKey} />
     </div>

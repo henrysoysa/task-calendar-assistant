@@ -88,3 +88,46 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Add these styles to your existing globals.css */
+
+@media (max-width: 620px) {
+  .mobile-calendar .fc-toolbar-title {
+    font-size: 1.2em !important;
+    text-align: left !important;
+    padding-left: 0 !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .mobile-calendar .fc-header-toolbar {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.5rem !important;
+  }
+
+  .mobile-calendar .fc-toolbar-chunk {
+    display: flex !important;
+    gap: 0.5rem !important;
+    width: auto !important;
+  }
+
+  .mobile-calendar .fc-toolbar-chunk:first-child {
+    order: 1 !important;
+    width: 100% !important;
+  }
+
+  .mobile-calendar .fc-toolbar-chunk:last-child {
+    order: 2 !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .mobile-calendar .fc-toolbar-chunk:nth-child(2) {
+    display: none !important;
+  }
+
+  .mobile-calendar .fc-today-button {
+    font-size: 0.875rem !important;
+    padding: 0.375rem 0.75rem !important;
+  }
+}
