@@ -40,7 +40,7 @@ const CalendarView: React.FC = () => {
     if (userId) {
       fetchTasks();
     }
-  }, [userId]);
+  }, [userId, refreshKey]);
 
   const fetchTasks = async () => {
     try {
@@ -50,12 +50,13 @@ const CalendarView: React.FC = () => {
         const calendarEvents = tasks.map((task: any) => ({
           id: task.id,
           title: task.taskName,
-          start: task.deadline,
-          end: new Date(new Date(task.deadline).getTime() + task.timeRequired * 60000),
+          start: new Date(task.deadline).getTime() - task.timeRequired * 60000,
+          end: new Date(task.deadline),
           extendedProps: {
             description: task.description,
             priority: task.priority,
             projectId: task.projectId,
+            status: task.status,
           },
         }));
         setEvents(calendarEvents);
@@ -65,6 +66,10 @@ const CalendarView: React.FC = () => {
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
+  };
+
+  const handleTaskUpdate = () => {
+    setRefreshKey(prev => prev + 1);
   };
 
   const handleViewChange = (view: string) => {
@@ -106,7 +111,7 @@ const CalendarView: React.FC = () => {
   return (
     <div className="container mx-auto p-4">
       <div className="mb-4 flex flex-col sm:flex-row sm:justify-end gap-2">
-        <AddEventButton onEventAdded={fetchTasks} />
+        <AddEventButton onEventAdded={handleTaskUpdate} />
         {windowWidth <= 620 && renderViewSelector()}
       </div>
       <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
@@ -126,7 +131,7 @@ const CalendarView: React.FC = () => {
           height="auto"
         />
       </div>
-      <TaskList refreshTrigger={refreshKey} />
+      <TaskList refreshTrigger={refreshKey} onTaskUpdate={handleTaskUpdate} />
     </div>
   );
 };

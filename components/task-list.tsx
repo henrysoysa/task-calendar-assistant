@@ -3,6 +3,15 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { useAuthContext } from '../contexts/AuthContext';
+import { Button } from './ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
+import { Edit2, CheckCircle, Circle, PlayCircle, XCircle } from 'lucide-react';
 
 interface Task {
   id: number;
@@ -12,21 +21,25 @@ interface Task {
   project: { name: string } | null;
   deadline: string;
   timeRequired: number;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
 }
 
 interface TaskListProps {
   refreshTrigger?: number;
+  onTaskUpdate: () => void;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0 }) => {
+const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate }) => {
   const { userId } = useAuthContext();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (userId) {
       fetchTasks();
     }
-  }, [userId, refreshTrigger]); // Add refreshTrigger to dependency array
+  }, [userId, refreshTrigger]);
 
   const fetchTasks = async () => {
     try {
@@ -42,26 +55,185 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0 }) => {
     }
   };
 
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateTask = async (updatedTask: Partial<Task>) => {
+    if (!editingTask) return;
+
+    try {
+      const response = await fetch(`/api/tasks/${editingTask.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTask),
+      });
+
+      if (response.ok) {
+        fetchTasks();
+        setIsEditDialogOpen(false);
+        setEditingTask(null);
+        onTaskUpdate();
+      } else {
+        console.error('Failed to update task');
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  const handleStatusChange = async (taskId: number, newStatus: Task['status']) => {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (response.ok) {
+        fetchTasks();
+        onTaskUpdate();
+      } else {
+        console.error('Failed to update task status');
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+    }
+  };
+
+  const getStatusIcon = (status: Task['status']) => {
+    switch (status) {
+      case 'COMPLETED':
+        return <CheckCircle className="text-green-500" />;
+      case 'IN_PROGRESS':
+        return <PlayCircle className="text-blue-500" />;
+      case 'BLOCKED':
+        return <XCircle className="text-red-500" />;
+      default:
+        return <Circle className="text-gray-500" />;
+    }
+  };
+
   return (
     <div className="bg-white p-4 rounded-md shadow-sm">
       <h2 className="text-xl font-semibold mb-4">Tasks</h2>
       {tasks.length === 0 ? (
         <p>No tasks scheduled.</p>
       ) : (
-        <ul>
+        <ul className="space-y-4">
           {tasks.map((task) => (
-            <li key={task.id} className="mb-2 p-2 border rounded">
-              <div className="font-semibold">{task.taskName}</div>
-              <div className="text-sm text-gray-600">
-                Project: {task.project?.name || 'No Project'} | Priority: {task.priority}
-              </div>
-              <div className="text-sm">
-                Deadline: {format(new Date(task.deadline), 'PPp')}
+            <li key={task.id} className="p-4 border rounded-lg hover:bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {getStatusIcon(task.status)}
+                  <div>
+                    <div className="font-semibold">{task.taskName}</div>
+                    <div className="text-sm text-gray-600">
+                      Project: {task.project?.name || 'No Project'} | Priority: {task.priority}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Deadline: {format(new Date(task.deadline), 'PPp')}
+                    </div>
+                    {task.description && (
+                      <div className="text-sm text-gray-600 mt-1">{task.description}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditTask(task)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <select
+                    value={task.status}
+                    onChange={(e) => handleStatusChange(task.id, e.target.value as Task['status'])}
+                    className="text-sm border rounded p-1"
+                  >
+                    <option value="NOT_STARTED">Not Started</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                    <option value="BLOCKED">Blocked</option>
+                  </select>
+                </div>
               </div>
             </li>
           ))}
         </ul>
       )}
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Task</DialogTitle>
+          </DialogHeader>
+          {editingTask && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                handleUpdateTask({
+                  taskName: formData.get('taskName') as string,
+                  description: formData.get('description') as string,
+                  priority: formData.get('priority') as string,
+                  deadline: new Date(formData.get('deadline') as string).toISOString(),
+                });
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium mb-1">Task Name</label>
+                <input
+                  name="taskName"
+                  defaultValue={editingTask.taskName}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  name="description"
+                  defaultValue={editingTask.description || ''}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Priority</label>
+                <select
+                  name="priority"
+                  defaultValue={editingTask.priority}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="LOW">Low</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option>
+                  <option value="URGENT">Urgent</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Deadline</label>
+                <input
+                  type="datetime-local"
+                  name="deadline"
+                  defaultValue={format(new Date(editingTask.deadline), "yyyy-MM-dd'T'HH:mm")}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -35,7 +35,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "types.d.ts",
+    "types/**/*.ts",
     ".next/types/**/*.ts",
     "global.d.ts"
   ],
