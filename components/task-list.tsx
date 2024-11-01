@@ -180,6 +180,7 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate })
                   description: formData.get('description') as string,
                   priority: formData.get('priority') as string,
                   deadline: new Date(formData.get('deadline') as string).toISOString(),
+                  timeRequired: parseInt(formData.get('timeRequired') as string, 10),
                 });
               }}
               className="space-y-4"
@@ -212,6 +213,17 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate })
                   <option value="HIGH">High</option>
                   <option value="URGENT">Urgent</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
+                <input
+                  type="number"
+                  name="timeRequired"
+                  defaultValue={editingTask.timeRequired}
+                  min="1"
+                  className="w-full p-2 border rounded"
+                  required
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Deadline</label>
