@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useClerk, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { Button } from './ui/button';
+import FeedbackForm from './feedback-form';
 
 const Header: React.FC = () => {
   const { signOut, openSignIn } = useClerk();
@@ -20,6 +21,7 @@ const Header: React.FC = () => {
           </Link>
           
           <div className="flex items-center space-x-4">
+            <FeedbackForm />
             <Link
               href="/account"
               className="text-gray-600 hover:text-gray-900 transition-colors"

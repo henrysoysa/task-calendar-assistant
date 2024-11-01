@@ -36,6 +36,7 @@
     "firebase": "^10.14.1",
     "firebase-admin": "^12.6.0",
     "firebase-tools": "^13.22.1",
+    "googleapis": "^144.0.0",
     "lucide-react": "^0.452.0",
     "mysql2": "^3.11.3",
     "next": "^14.2.15",
