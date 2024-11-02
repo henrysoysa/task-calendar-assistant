@@ -24,7 +24,7 @@ const AddEventButton: React.FC<AddEventButtonProps> = ({ onEventAdded }) => {
     <>
       <button
         onClick={() => setIsFormOpen(true)}
-        className="bg-black text-white py-2 px-4 rounded-md hover:bg-gray-800 transition-colors"
+        className="bg-violet-600 text-white py-2 px-4 rounded-md hover:bg-violet-700 transition-colors"
       >
         + Add Event
       </button>

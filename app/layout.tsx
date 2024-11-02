@@ -27,7 +27,7 @@ export default function RootLayout({
     <ClerkProvider>
       <AuthProvider>
         <html lang="en">
-          <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+          <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#e0e7ff] min-h-screen`}>
             <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
               {children}

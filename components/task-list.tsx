@@ -27,13 +27,15 @@ interface Task {
 interface TaskListProps {
   refreshTrigger?: number;
   onTaskUpdate: () => void;
+  editingTask: Task | null;
+  isEditDialogOpen: boolean;
+  setIsEditDialogOpen: (isOpen: boolean) => void;
+  setEditingTask: (task: Task | null) => void;
 }
 
-const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate }) => {
+const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate, editingTask, isEditDialogOpen, setIsEditDialogOpen, setEditingTask }) => {
   const { userId } = useAuthContext();
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -107,11 +109,11 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate })
       case 'COMPLETED':
         return <CheckCircle className="text-green-500" />;
       case 'IN_PROGRESS':
-        return <PlayCircle className="text-blue-500" />;
+        return <PlayCircle className="text-violet-500" />;
       case 'BLOCKED':
         return <XCircle className="text-red-500" />;
       default:
-        return <Circle className="text-gray-500" />;
+        return <Circle className="text-violet-300" />;
     }
   };
 
@@ -123,7 +125,7 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate })
       ) : (
         <ul className="space-y-4">
           {tasks.map((task) => (
-            <li key={task.id} className="p-4 border rounded-lg hover:bg-gray-50">
+            <li key={task.id} className="p-4 border border-violet-100 rounded-lg hover:bg-violet-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {getStatusIcon(task.status)}
@@ -238,7 +240,7 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate })
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">
+                <Button type="submit" className="bg-violet-600 hover:bg-violet-700 text-white">
                   Save Changes
                 </Button>
               </div>

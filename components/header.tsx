@@ -10,12 +10,12 @@ const Header: React.FC = () => {
   const { signOut, openSignIn } = useClerk();
 
   return (
-    <header className="bg-white shadow-sm">
+    <header className="bg-white shadow-sm border-b border-violet-100">
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-between items-center">
           <Link 
             href="/" 
-            className="text-xl font-bold text-gray-800 hover:text-gray-600 transition-colors"
+            className="text-xl font-bold text-violet-700 hover:text-violet-600 transition-colors"
           >
             Calendar Assistant
           </Link>
@@ -24,7 +24,7 @@ const Header: React.FC = () => {
             <FeedbackForm />
             <Link
               href="/account"
-              className="text-gray-600 hover:text-gray-900 transition-colors"
+              className="text-violet-600 hover:text-violet-800 transition-colors"
             >
               Account
             </Link>
@@ -34,7 +34,7 @@ const Header: React.FC = () => {
                 <Button 
                   onClick={() => signOut()}
                   variant="ghost"
-                  className="text-gray-600 hover:text-gray-900"
+                  className="text-violet-600 hover:text-violet-800"
                 >
                   Sign Out
                 </Button>
@@ -43,7 +43,7 @@ const Header: React.FC = () => {
             <SignedOut>
               <Button 
                 onClick={() => openSignIn()}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                className="bg-violet-600 hover:bg-violet-700 text-white font-semibold"
               >
                 Sign In
               </Button>

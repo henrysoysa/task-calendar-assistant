@@ -22,7 +22,7 @@ export default function Home() {
   if (userId) {
     return (
       <main>
-        <h3 className="text-2xl font-bold mb-4">Your Calendar Assistant</h3>
+        <h3 className="text-2xl font-bold mb-4">Your Calendar Overview</h3>
         <CalendarView />
       </main>
     );
