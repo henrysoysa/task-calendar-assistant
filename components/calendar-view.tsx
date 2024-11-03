@@ -30,6 +30,8 @@ import {
   hasOverlap, 
   needsRescheduling 
 } from '../lib/scheduling';
+import GoogleCalendarIntegration from './google-calendar-integration';
+import { useUser } from '@clerk/nextjs';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
@@ -44,6 +46,9 @@ const CalendarView: React.FC = () => {
   );
   const calendarRef = useRef<FullCalendar | null>(null);
   const [lastScheduledDate, setLastScheduledDate] = useState<Date>(new Date());
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const { user } = useUser();
 
   useEffect(() => {
     const handleResize = () => {
@@ -104,92 +109,63 @@ const CalendarView: React.FC = () => {
       const response = await fetch('/api/tasks');
       if (response.ok) {
         const tasks = await response.json();
-        const now = new Date();
-        
-        // Add type for task priority
-        type TaskPriority = 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
-        
-        // Filter out completed tasks and convert remaining tasks to calendar events
-        const activeTasks = tasks.filter((task: any) => 
-          task.status !== 'COMPLETED' && 
-          new Date(task.deadline) > now
-        );
-
-        // Get existing non-task events
-        const existingEvents = events.filter(event => 
-          !event.extendedProps?.isTask
-        );
-
-        // Schedule all active tasks
-        const taskSchedule = new Map();
-        const sortedTasks = [...activeTasks].sort((a, b) => {
-          // Sort by priority first with proper typing
-          const priorityOrder: Record<TaskPriority, number> = {
-            'URGENT': 0,
-            'HIGH': 1,
-            'MEDIUM': 2,
-            'LOW': 3
-          };
-          
-          const priorityDiff = priorityOrder[a.priority as TaskPriority] - priorityOrder[b.priority as TaskPriority];
-          if (priorityDiff !== 0) return priorityDiff;
-          
-          // Then by deadline
-          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-        });
-
-        // Schedule each task
-        for (const task of sortedTasks) {
-          // Convert task to proper format for scheduling
-          const taskForScheduling = {
-            id: task.id,
-            taskName: task.taskName,
-            deadline: new Date(task.deadline),
-            timeRequired: task.timeRequired,
-            priority: task.priority as TaskPriority
-          };
-
-          const scheduledTime = scheduleTask(taskForScheduling, [
-            ...existingEvents,
-            ...Array.from(taskSchedule.values())
-          ]);
-          taskSchedule.set(task.id, scheduledTime);
-        }
-        
-        // Convert tasks to calendar events with proper date handling
-        const calendarEvents = sortedTasks.map((task: any) => {
-          const scheduledTime = taskSchedule.get(task.id) || {
-            start: new Date(new Date(task.deadline).getTime() - task.timeRequired * 60000),
-            end: new Date(task.deadline)
-          };
-          
-          return {
-            id: task.id.toString(),
-            title: `${task.taskName} (${task.priority})`,
-            start: scheduledTime.start.toISOString(), // Ensure proper date format
-            end: scheduledTime.end.toISOString(),     // Ensure proper date format
-            extendedProps: {
-              ...task,
-              isTask: true
-            },
-            className: `priority-${task.priority.toLowerCase()} ${
-              task.status === 'IN_PROGRESS' ? 'in-progress' : ''
-            } ${task.status === 'BLOCKED' ? 'blocked' : ''} ${
-              selectedEventId === task.id.toString() ? 'selected-event' : ''
-            }`,
-          };
-        });
-        
-        // Debug logging
-        console.log('Active Tasks:', activeTasks.length);
-        console.log('Calendar Events:', calendarEvents.length);
-        
-        setEvents([...existingEvents, ...calendarEvents]);
+        setTasks(tasks);
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
   };
+
+  const fetchGoogleEvents = async () => {
+    try {
+      const response = await fetch('/api/google-calendar/events');
+      if (response.ok) {
+        const events = await response.json();
+        setGoogleEvents(events);
+      }
+    } catch (error) {
+      console.error('Error fetching Google Calendar events:', error);
+    }
+  };
+
+  const getCalendarEvents = () => {
+    const taskEvents = tasks.map(task => ({
+      id: `task-${task.id}`,
+      title: task.taskName,
+      start: new Date(task.deadline).getTime() - task.timeRequired * 60000,
+      end: new Date(task.deadline),
+      extendedProps: {
+        ...task,
+        isTask: true
+      },
+      className: `task-event priority-${task.priority.toLowerCase()} ${
+        task.status === 'COMPLETED' ? 'completed-task' : ''
+      } ${selectedEventId === `task-${task.id}` ? 'selected-event' : ''}`
+    }));
+
+    const googleCalendarEvents = googleEvents.map(event => ({
+      id: `google-${event.googleCalendarEventId}`,
+      title: event.title,
+      start: new Date(event.startTime),
+      end: new Date(event.endTime),
+      extendedProps: {
+        ...event,
+        isGoogleEvent: true
+      },
+      className: `google-calendar-event ${
+        selectedEventId === `google-${event.googleCalendarEventId}` ? 'selected-event' : ''
+      }`
+    }));
+
+    return [...taskEvents, ...googleCalendarEvents];
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchTasks();
+      fetchGoogleEvents();
+    }
+  }, [user, refreshKey]);
 
   const handleTaskUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -300,17 +276,21 @@ const CalendarView: React.FC = () => {
 
   return (
     <div className="container mx-auto p-4" onClick={handleContainerClick}>
-      <div className="mb-4 flex flex-col sm:flex-row sm:justify-end gap-2">
-        <AddEventButton onEventAdded={handleTaskUpdate} />
-        {windowWidth <= 620 && renderViewSelector()}
+      <div className="mb-4 flex flex-col sm:flex-row sm:justify-between gap-2">
+        <GoogleCalendarIntegration onSync={() => fetchGoogleEvents()} />
+        <div className="flex gap-2">
+          <AddEventButton onEventAdded={handleTaskUpdate} />
+          {windowWidth <= 620 && renderViewSelector()}
+        </div>
       </div>
       <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={currentView}
-          events={events}
+          events={getCalendarEvents()}
           eventClick={handleEventClick}
+          eventContent={renderEventContent}
           headerToolbar={windowWidth <= 620 ? {
             left: 'title',
             center: '',
@@ -463,6 +443,20 @@ const CalendarView: React.FC = () => {
           }
         }
       `}</style>
+    </div>
+  );
+};
+
+// Custom event rendering
+const renderEventContent = (eventInfo: any) => {
+  const isGoogleEvent = eventInfo.event.extendedProps.isGoogleEvent;
+  
+  return (
+    <div className={`event-content ${isGoogleEvent ? 'google-event' : 'task-event'}`}>
+      <div className="event-title">
+        {isGoogleEvent && <span className="google-icon">📅</span>}
+        {eventInfo.event.title}
+      </div>
     </div>
   );
 };
