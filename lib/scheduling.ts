@@ -9,7 +9,8 @@ import {
   setHours,
   setMinutes,
   isWeekend,
-  getDay
+  getDay,
+  isSameDay
 } from 'date-fns';
 
 // Working hours configuration - Updated start time to 9 AM
@@ -35,23 +36,31 @@ const isWithinWorkingHours = (date: Date): boolean => {
 const getNextWorkingTime = (date: Date): Date => {
   let nextTime = new Date(date);
   
-  // If it's weekend, move to Monday
-  while (isWeekend(nextTime)) {
-    nextTime = addDays(nextTime, 1);
+  // First, check if we're before today's working hours
+  if (nextTime.getHours() < WORKING_HOURS.start) {
+    nextTime.setHours(WORKING_HOURS.start, 0, 0, 0);
+    if (WORKING_HOURS.workingDays.includes(getDay(nextTime))) {
+      return nextTime;
+    }
   }
-  
-  // Set to start of working hours if outside working hours
-  const hour = nextTime.getHours();
-  if (hour < WORKING_HOURS.start) {
-    nextTime = setHours(nextTime, WORKING_HOURS.start);
-    nextTime = setMinutes(nextTime, 0);
-  } else if (hour >= WORKING_HOURS.end) {
-    // Move to next working day
+
+  // If we're after today's working hours or it's not a working day,
+  // move to next working day
+  while (!WORKING_HOURS.workingDays.includes(getDay(nextTime)) || 
+         nextTime.getHours() >= WORKING_HOURS.end) {
     nextTime = addDays(nextTime, 1);
-    nextTime = setHours(nextTime, WORKING_HOURS.start);
-    nextTime = setMinutes(nextTime, 0);
+    nextTime.setHours(WORKING_HOURS.start, 0, 0, 0);
   }
-  
+
+  // If we're within working hours, keep current time
+  if (nextTime.getHours() >= WORKING_HOURS.start && 
+      nextTime.getHours() < WORKING_HOURS.end &&
+      WORKING_HOURS.workingDays.includes(getDay(nextTime))) {
+    return nextTime;
+  }
+
+  // Default to start of next working day
+  nextTime.setHours(WORKING_HOURS.start, 0, 0, 0);
   return nextTime;
 };
 
@@ -114,46 +123,182 @@ const findAvailableSlots = (
   return slots;
 };
 
+interface ExternalEvent extends Event {
+  isExternal: boolean;
+  source: 'google' | 'other';
+  title: string;
+  allDay?: boolean;
+}
+
+const PRIORITY_ORDER = {
+  'URGENT': 0,
+  'HIGH': 1,
+  'MEDIUM': 2,
+  'LOW': 3
+};
+
 // Schedule a single task
-const scheduleTask = (task: Task, existingEvents: Event[]): TimeSlot => {
-  const now = new Date();
-  const deadline = new Date(task.deadline);
-  const lookAheadDays = 14; // Look ahead window for scheduling
-
-  // Find all available slots up to the deadline
-  const availableSlots = findAvailableSlots(
-    now,
-    addDays(deadline, lookAheadDays),
-    existingEvents,
-    task.timeRequired
-  );
-
-  // Filter slots that can fit the task and end before deadline
-  const validSlots = availableSlots.filter(slot => {
-    const slotDuration = (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
-    const taskEnd = addMinutes(slot.start, task.timeRequired);
-    return slotDuration >= task.timeRequired && isBefore(taskEnd, deadline);
+const scheduleTask = (task: Task, existingEvents: (Event | ExternalEvent)[]): TimeSlot => {
+  console.group('📅 Scheduling Task:', task.taskName);
+  
+  // Log task details
+  console.log('Task Details:', {
+    name: task.taskName,
+    priority: task.priority,
+    duration: task.timeRequired,
+    deadline: new Date(task.deadline).toISOString()
   });
 
-  if (validSlots.length === 0) {
-    // Fallback: schedule at deadline during working hours
-    const latestStart = new Date(deadline);
-    latestStart.setHours(Math.max(WORKING_HOURS.start, deadline.getHours() - Math.ceil(task.timeRequired / 60)));
-    latestStart.setMinutes(deadline.getMinutes());
+  // Log current time and working hours
+  const now = new Date();
+  const deadline = new Date(task.deadline);
+  let currentDate = getNextWorkingTime(now);
+
+  console.log('Time Context:', {
+    currentTime: now.toISOString(),
+    workingHoursStart: WORKING_HOURS.start,
+    workingHoursEnd: WORKING_HOURS.end,
+    nextWorkingTime: currentDate.toISOString(),
+    deadline: deadline.toISOString()
+  });
+
+  // Filter and log blocking events
+  const blockingEvents = existingEvents
+    .filter(event => {
+      const eventData = event as ExternalEvent;
+      return !eventData.allDay;
+    })
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+  console.log('Blocking Events:', blockingEvents.map(event => ({
+    title: (event as any).title || 'Untitled',
+    start: new Date(event.start).toISOString(),
+    end: new Date(event.end).toISOString(),
+    isExternal: (event as ExternalEvent).isExternal
+  })));
+
+  // Find all available slots up to deadline
+  const availableSlots: TimeSlot[] = [];
+  
+  while (isBefore(currentDate, deadline)) {
+    if (WORKING_HOURS.workingDays.includes(getDay(currentDate))) {
+      const dayStart = setHours(startOfDay(currentDate), WORKING_HOURS.start);
+      const dayEnd = setHours(startOfDay(currentDate), WORKING_HOURS.end);
+      
+      console.log(`Checking day ${currentDate.toDateString()}:`, {
+        dayStart: dayStart.toISOString(),
+        dayEnd: dayEnd.toISOString(),
+        isWorkingDay: true,
+        workingHours: `${WORKING_HOURS.start}:00-${WORKING_HOURS.end}:00`
+      });
+
+      // Get events for current day
+      const dayEvents = blockingEvents.filter(event => 
+        isSameDay(new Date(event.start), currentDate)
+      );
+
+      console.log('Events for this day:', dayEvents.map(event => ({
+        title: (event as any).title || 'Untitled',
+        start: new Date(event.start).toISOString(),
+        end: new Date(event.end).toISOString()
+      })));
+
+      if (dayEvents.length === 0) {
+        // Whole day is free
+        console.log('Whole day is free');
+        availableSlots.push({
+          start: dayStart,
+          end: dayEnd
+        });
+      } else {
+        // Check gaps between events
+        let timePointer = dayStart;
+
+        for (let i = 0; i <= dayEvents.length; i++) {
+          const slotEnd = i < dayEvents.length 
+            ? new Date(dayEvents[i].start)
+            : dayEnd;
+
+          const duration = (slotEnd.getTime() - timePointer.getTime()) / (1000 * 60);
+          
+          console.log('Checking gap:', {
+            start: timePointer.toISOString(),
+            end: slotEnd.toISOString(),
+            duration: `${duration} minutes`,
+            requiredDuration: `${task.timeRequired} minutes`,
+            isSufficient: duration >= task.timeRequired
+          });
+
+          if (duration >= task.timeRequired) {
+            availableSlots.push({
+              start: timePointer,
+              end: slotEnd
+            });
+          }
+
+          if (i < dayEvents.length) {
+            timePointer = new Date(dayEvents[i].end);
+          }
+        }
+      }
+    } else {
+      console.log(`Skipping non-working day: ${currentDate.toDateString()}`);
+    }
     
-    return {
-      start: latestStart,
-      end: deadline
-    };
+    currentDate = addDays(currentDate, 1);
+    currentDate = setHours(currentDate, WORKING_HOURS.start);
   }
 
-  // Choose best slot based on priority and deadline
-  const bestSlot = validSlots[0]; // Use earliest available slot
-  
-  return {
-    start: bestSlot.start,
-    end: addMinutes(bestSlot.start, task.timeRequired)
-  };
+  console.log('Available slots found:', availableSlots.map(slot => ({
+    start: slot.start.toISOString(),
+    end: slot.end.toISOString(),
+    duration: (slot.end.getTime() - slot.start.getTime()) / (1000 * 60)
+  })));
+
+  // Sort slots by start time
+  availableSlots.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  console.log('Available slots found:', availableSlots.length);
+
+  // Find the earliest valid slot that doesn't conflict with higher priority tasks
+  for (const slot of availableSlots) {
+    const taskSlot = {
+      start: slot.start,
+      end: addMinutes(slot.start, task.timeRequired)
+    };
+
+    // Check for conflicts with existing events
+    const conflicts = blockingEvents.filter(event => {
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const eventPriority = (event as any).extendedProps?.priority;
+      
+      // Only consider conflicts with higher or equal priority tasks
+      if (eventPriority && PRIORITY_ORDER[eventPriority] > PRIORITY_ORDER[task.priority]) {
+        return false;
+      }
+
+      return (
+        (taskSlot.start < eventEnd && taskSlot.end > eventStart) ||
+        (taskSlot.start >= eventStart && taskSlot.start < eventEnd) ||
+        (taskSlot.end > eventStart && taskSlot.end <= eventEnd)
+      );
+    });
+
+    if (conflicts.length === 0 && isBefore(taskSlot.end, deadline)) {
+      console.log('Found valid slot:', {
+        start: taskSlot.start.toISOString(),
+        end: taskSlot.end.toISOString()
+      });
+      console.groupEnd();
+      return taskSlot;
+    }
+  }
+
+  // If no valid slot found, throw error
+  console.error('No valid slots found for task:', task.taskName);
+  console.groupEnd();
+  throw new Error(`No valid slots available for task: ${task.taskName}`);
 };
 
 // Schedule multiple tasks optimally
@@ -194,6 +339,26 @@ const needsRescheduling = (lastScheduled: Date): boolean => {
   return isAfter(today, lastScheduledDay);
 };
 
+// Update hasConflict to handle external events
+const hasConflict = (slot: TimeSlot, existingEvents: (Event | ExternalEvent)[]): boolean => {
+  return existingEvents.some(event => {
+    // Skip all-day events for conflict checking
+    if ((event as ExternalEvent).allDay) {
+      return false;
+    }
+
+    const eventStart = new Date(event.start);
+    const eventEnd = new Date(event.end);
+    
+    return (
+      (slot.start < eventEnd && slot.end > eventStart) ||
+      (slot.start >= eventStart && slot.start < eventEnd) ||
+      (slot.end > eventStart && slot.end <= eventEnd) ||
+      (slot.start <= eventStart && slot.end >= eventEnd)
+    );
+  });
+};
+
 // Single export statement for all functions and constants
 export {
   findAvailableSlots,
@@ -203,5 +368,6 @@ export {
   needsRescheduling,
   isWithinWorkingHours,
   getNextWorkingTime,
-  WORKING_HOURS
+  WORKING_HOURS,
+  hasConflict
 };
