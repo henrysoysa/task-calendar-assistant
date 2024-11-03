@@ -23,6 +23,13 @@ import {
 } from "./ui/dropdown-menu";
 import { Button } from './ui/button';
 import { ChevronDown } from 'lucide-react';
+import { startOfDay, isAfter } from 'date-fns';
+import { 
+  scheduleTask, 
+  scheduleMultipleTasks, 
+  hasOverlap, 
+  needsRescheduling 
+} from '../lib/scheduling';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
@@ -36,6 +43,7 @@ const CalendarView: React.FC = () => {
     typeof window !== 'undefined' ? window.innerWidth : 0
   );
   const calendarRef = useRef<FullCalendar | null>(null);
+  const [lastScheduledDate, setLastScheduledDate] = useState<Date>(new Date());
 
   useEffect(() => {
     const handleResize = () => {
@@ -59,28 +67,124 @@ const CalendarView: React.FC = () => {
     }
   }, [windowWidth]);
 
+  useEffect(() => {
+    const checkSchedule = () => {
+      if (needsRescheduling(lastScheduledDate)) {
+        fetchTasks();
+        setLastScheduledDate(new Date());
+      }
+    };
+
+    checkSchedule();
+    
+    const intervalId = setInterval(checkSchedule, 60 * 60 * 1000);
+    
+    const handleFocus = () => checkSchedule();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [lastScheduledDate]);
+
+  useEffect(() => {
+    const storedDate = localStorage.getItem('lastScheduledDate');
+    if (storedDate) {
+      setLastScheduledDate(new Date(storedDate));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('lastScheduledDate', lastScheduledDate.toISOString());
+  }, [lastScheduledDate]);
+
   const fetchTasks = async () => {
     try {
       const response = await fetch('/api/tasks');
       if (response.ok) {
         const tasks = await response.json();
-        const calendarEvents = tasks.map((task: any) => ({
-          id: task.id.toString(),
-          title: task.taskName,
-          start: new Date(task.deadline).getTime() - task.timeRequired * 60000,
-          end: new Date(task.deadline),
-          extendedProps: {
-            ...task,
-            description: task.description,
-            priority: task.priority,
-            projectId: task.projectId,
-            status: task.status,
-          },
-          className: selectedEventId === task.id.toString() ? 'selected-event' : '',
-        }));
-        setEvents(calendarEvents);
-      } else {
-        console.error('Failed to fetch tasks');
+        const now = new Date();
+        
+        // Add type for task priority
+        type TaskPriority = 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+        
+        // Filter out completed tasks and convert remaining tasks to calendar events
+        const activeTasks = tasks.filter((task: any) => 
+          task.status !== 'COMPLETED' && 
+          new Date(task.deadline) > now
+        );
+
+        // Get existing non-task events
+        const existingEvents = events.filter(event => 
+          !event.extendedProps?.isTask
+        );
+
+        // Schedule all active tasks
+        const taskSchedule = new Map();
+        const sortedTasks = [...activeTasks].sort((a, b) => {
+          // Sort by priority first with proper typing
+          const priorityOrder: Record<TaskPriority, number> = {
+            'URGENT': 0,
+            'HIGH': 1,
+            'MEDIUM': 2,
+            'LOW': 3
+          };
+          
+          const priorityDiff = priorityOrder[a.priority as TaskPriority] - priorityOrder[b.priority as TaskPriority];
+          if (priorityDiff !== 0) return priorityDiff;
+          
+          // Then by deadline
+          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        });
+
+        // Schedule each task
+        for (const task of sortedTasks) {
+          // Convert task to proper format for scheduling
+          const taskForScheduling = {
+            id: task.id,
+            taskName: task.taskName,
+            deadline: new Date(task.deadline),
+            timeRequired: task.timeRequired,
+            priority: task.priority as TaskPriority
+          };
+
+          const scheduledTime = scheduleTask(taskForScheduling, [
+            ...existingEvents,
+            ...Array.from(taskSchedule.values())
+          ]);
+          taskSchedule.set(task.id, scheduledTime);
+        }
+        
+        // Convert tasks to calendar events with proper date handling
+        const calendarEvents = sortedTasks.map((task: any) => {
+          const scheduledTime = taskSchedule.get(task.id) || {
+            start: new Date(new Date(task.deadline).getTime() - task.timeRequired * 60000),
+            end: new Date(task.deadline)
+          };
+          
+          return {
+            id: task.id.toString(),
+            title: `${task.taskName} (${task.priority})`,
+            start: scheduledTime.start.toISOString(), // Ensure proper date format
+            end: scheduledTime.end.toISOString(),     // Ensure proper date format
+            extendedProps: {
+              ...task,
+              isTask: true
+            },
+            className: `priority-${task.priority.toLowerCase()} ${
+              task.status === 'IN_PROGRESS' ? 'in-progress' : ''
+            } ${task.status === 'BLOCKED' ? 'blocked' : ''} ${
+              selectedEventId === task.id.toString() ? 'selected-event' : ''
+            }`,
+          };
+        });
+        
+        // Debug logging
+        console.log('Active Tasks:', activeTasks.length);
+        console.log('Calendar Events:', calendarEvents.length);
+        
+        setEvents([...existingEvents, ...calendarEvents]);
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
