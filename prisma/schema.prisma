@@ -54,3 +54,32 @@ model Event {
   start  DateTime
   end    DateTime
 }
+
+// Add Google Calendar models
+model GoogleCalendarCredentials {
+  id            Int       @id @default(autoincrement())
+  userId        String    @unique
+  accessToken   String
+  refreshToken  String?
+  expiryDate    DateTime?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  events        GoogleCalendarEvent[]
+}
+
+model GoogleCalendarEvent {
+  id                    Int       @id @default(autoincrement())
+  googleCalendarEventId String    @unique
+  credentialsId         Int
+  credentials          GoogleCalendarCredentials @relation(fields: [credentialsId], references: [id])
+  title                String
+  description          String?
+  startTime            DateTime
+  endTime              DateTime
+  isAllDay             Boolean   @default(false)
+  isRecurring          Boolean   @default(false)
+  recurringEventId     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}

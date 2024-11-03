@@ -2,6 +2,9 @@
 
 import React from 'react';
 import { useUser, SignedIn, SignedOut } from '@clerk/nextjs';
+import { Button } from '@/components/ui/button';
+import PreferencesSection from '@/components/preferences-section';
+import GoogleCalendarIntegration from '@/components/google-calendar-integration';
 
 const AccountPage = () => {
   const { user, isLoaded } = useUser();
@@ -11,10 +14,13 @@ const AccountPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto space-y-6">
       <SignedIn>
+        {/* Account Information Section */}
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          <h1 className="text-2xl font-bold mb-6">Account Information</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Account Information</h1>
+          </div>
           
           <div className="space-y-4">
             <div>
@@ -36,36 +42,22 @@ const AccountPage = () => {
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold mb-2">Account Details</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-gray-600">User ID</p>
-                  <p className="font-medium">{user?.id || 'Not available'}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Created</p>
-                  <p className="font-medium">
-                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Not available'}
-                  </p>
-                </div>
-              </div>
+              <h2 className="text-lg font-semibold mb-2">Account Created</h2>
+              <p className="text-gray-600">
+                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Not available'}
+              </p>
             </div>
-
-            {user?.organizationMemberships && user.organizationMemberships.length > 0 && (
-              <div>
-                <h2 className="text-lg font-semibold mb-2">Organizations</h2>
-                <div className="space-y-2">
-                  {user.organizationMemberships.map((membership) => (
-                    <div key={membership.organization.id} className="p-3 bg-gray-50 rounded">
-                      <p className="font-medium">{membership.organization.name}</p>
-                      <p className="text-sm text-gray-600">Role: {membership.role}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Calendar Integrations */}
+        <div className="space-y-4">
+          <h2 className="text-xl font-bold">Calendar Integrations</h2>
+          <GoogleCalendarIntegration />
+        </div>
+
+        {/* Preferences Section */}
+        <PreferencesSection />
       </SignedIn>
       
       <SignedOut>
@@ -73,13 +65,8 @@ const AccountPage = () => {
           <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-8">
             <h1 className="text-2xl font-bold mb-4">Access Required</h1>
             <p className="text-gray-600 mb-6">
-              Please sign-up or login to continue. You can find the sign-in button in the header above.
+              Please sign in to view your account information and preferences.
             </p>
-            <div className="p-4 bg-blue-50 rounded-md">
-              <p className="text-sm text-blue-800">
-                Create an account or sign in to view your account information and access all features.
-              </p>
-            </div>
           </div>
         </div>
       </SignedOut>

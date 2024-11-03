@@ -11,7 +11,7 @@ const Footer: React.FC = () => {
           <div className="text-sm text-gray-600">
             © {new Date().getFullYear()} Calendar Assistant. All rights reserved.
           </div>
-          <div className="flex space-x-4">
+          <div className="flex space-x-4 items-center">
             <Link 
               href="/privacy-policy" 
               className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
