@@ -221,6 +221,11 @@ const CalendarView: React.FC = () => {
       const api = calendarRef.current.getApi();
       api.changeView(view);
       setCurrentView(api.view.type);
+      
+      // Scroll to current time when switching to week or day view
+      if (view === 'timeGridWeek' || view === 'timeGridDay') {
+        setTimeout(scrollToCurrentTime, 100); // Small delay to ensure view is rendered
+      }
     }
   };
 
@@ -262,6 +267,33 @@ const CalendarView: React.FC = () => {
     return null;
   };
 
+  // Function to scroll to current time in timeGrid views
+  const scrollToCurrentTime = () => {
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      const currentView = calendarApi.view;
+
+      if (currentView.type === 'timeGridWeek' || currentView.type === 'timeGridDay') {
+        const now = new Date();
+        // Convert current time to duration format (HH:mm:ss)
+        const scrollTime = {
+          hours: now.getHours(),
+          minutes: Math.max(0, now.getMinutes() - 30), // Subtract 30 minutes but don't go below 0
+          seconds: 0
+        };
+        
+        calendarApi.scrollToTime(scrollTime);
+      }
+    }
+  };
+
+  // Add effect to handle initial scroll on view mount
+  useEffect(() => {
+    if (currentView === 'timeGridWeek' || currentView === 'timeGridDay') {
+      scrollToCurrentTime();
+    }
+  }, [currentView]);
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -289,6 +321,30 @@ const CalendarView: React.FC = () => {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           height="auto"
+          dayMaxEvents={2}
+          dayMaxEventRows={2}
+          scrollTime="06:00:00"
+          slotMinTime="06:00:00"
+          slotMaxTime="22:00:00"
+          nowIndicator={true}
+          views={{
+            dayGridMonth: {
+              dayMaxEvents: 2,
+              dayMaxEventRows: 2,
+              moreLinkText: count => `+${count} more`,
+              moreLinkClick: 'day'
+            },
+            timeGridWeek: {
+              dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
+              slotDuration: '00:30:00',
+              slotLabelInterval: '01:00',
+            },
+            timeGridDay: {
+              dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
+              slotDuration: '00:30:00',
+              slotLabelInterval: '01:00',
+            }
+          }}
         />
       </div>
       <TaskList 

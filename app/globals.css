@@ -245,3 +245,55 @@
   );
   pointer-events: none;
 }
+
+/* Event Limiting Styles */
+.fc-daygrid-more-link {
+  color: rgb(139, 92, 246) !important; /* violet-500 */
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 2px 4px;
+  margin-top: 2px;
+  background-color: rgba(139, 92, 246, 0.1);
+  border-radius: 4px;
+}
+
+.fc-daygrid-more-link:hover {
+  background-color: rgba(139, 92, 246, 0.2);
+  text-decoration: none !important;
+}
+
+/* Current Time Indicator */
+.fc .fc-timegrid-now-indicator-line {
+  border-color: rgb(244, 63, 94) !important; /* rose-500 */
+  border-width: 2px;
+}
+
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: rgb(244, 63, 94) !important; /* rose-500 */
+  border-width: 5px;
+}
+
+/* Time Grid Slots */
+.fc .fc-timegrid-slot {
+  height: 3rem;
+  border-color: rgb(237, 233, 254); /* violet-100 */
+}
+
+.fc .fc-timegrid-slot-lane {
+  border-bottom: 1px dashed rgb(237, 233, 254); /* violet-100 */
+}
+
+/* Current Day Highlight in Week View */
+.fc .fc-day-today {
+  background-color: rgba(139, 92, 246, 0.05) !important;
+}
+
+/* Event Limiting Container */
+.fc-daygrid-day-events {
+  margin-bottom: 2px;
+}
+
+.fc-daygrid-day-bottom {
+  padding: 2px;
+  min-height: 20px;
+}
