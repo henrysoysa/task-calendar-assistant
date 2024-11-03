@@ -12,9 +12,9 @@ import {
   getDay
 } from 'date-fns';
 
-// Working hours configuration
+// Working hours configuration - Updated start time to 9 AM
 const WORKING_HOURS = {
-  start: 8, // 8 AM
+  start: 9, // Changed from 8 AM to 9 AM
   end: 18,  // 6 PM
   workingDays: [1, 2, 3, 4, 5] // Monday to Friday (0 = Sunday, 1 = Monday, etc.)
 };
