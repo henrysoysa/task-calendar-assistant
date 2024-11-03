@@ -24,16 +24,19 @@ import {
 import { Button } from './ui/button';
 import { ChevronDown } from 'lucide-react';
 import { startOfDay, isAfter } from 'date-fns';
-import { 
-  scheduleTask, 
-  scheduleMultipleTasks, 
-  hasOverlap, 
-  needsRescheduling 
-} from '../lib/scheduling';
+import { scheduleTask, needsRescheduling } from '../lib/scheduling';
+import { useUser } from '@clerk/nextjs';
+import GoogleCalendarIntegration from './google-calendar-integration';
+
+interface TaskWithPriority {
+  priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+}
 
 const CalendarView: React.FC = () => {
-  const { userId, loading } = useAuthContext();
+  const { user } = useUser();
   const [events, setEvents] = useState<EventInput[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<EventInput[]>([]);
+  const [tasks, setTasks] = useState<EventInput[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [currentView, setCurrentView] = useState('dayGridMonth');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
@@ -44,6 +47,7 @@ const CalendarView: React.FC = () => {
   );
   const calendarRef = useRef<FullCalendar | null>(null);
   const [lastScheduledDate, setLastScheduledDate] = useState<Date>(new Date());
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const handleResize = () => {
@@ -53,19 +57,6 @@ const CalendarView: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  useEffect(() => {
-    if (userId) {
-      fetchTasks();
-    }
-  }, [userId, refreshKey]);
-
-  useEffect(() => {
-    if (calendarRef.current) {
-      const api = calendarRef.current.getApi();
-      setCurrentView(api.view.type);
-    }
-  }, [windowWidth]);
 
   useEffect(() => {
     const checkSchedule = () => {
@@ -103,93 +94,181 @@ const CalendarView: React.FC = () => {
     try {
       const response = await fetch('/api/tasks');
       if (response.ok) {
-        const tasks = await response.json();
-        const now = new Date();
+        const tasksData = await response.json();
+        console.log('Fetched Tasks:', tasksData);
         
-        // Add type for task priority
-        type TaskPriority = 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
-        
-        // Filter out completed tasks and convert remaining tasks to calendar events
-        const activeTasks = tasks.filter((task: any) => 
-          task.status !== 'COMPLETED' && 
-          new Date(task.deadline) > now
-        );
-
-        // Get existing non-task events
-        const existingEvents = events.filter(event => 
-          !event.extendedProps?.isTask
-        );
-
-        // Schedule all active tasks
-        const taskSchedule = new Map();
-        const sortedTasks = [...activeTasks].sort((a, b) => {
-          // Sort by priority first with proper typing
-          const priorityOrder: Record<TaskPriority, number> = {
-            'URGENT': 0,
-            'HIGH': 1,
-            'MEDIUM': 2,
-            'LOW': 3
-          };
-          
-          const priorityDiff = priorityOrder[a.priority as TaskPriority] - priorityOrder[b.priority as TaskPriority];
-          if (priorityDiff !== 0) return priorityDiff;
-          
-          // Then by deadline
-          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
-        });
-
-        // Schedule each task
-        for (const task of sortedTasks) {
-          // Convert task to proper format for scheduling
-          const taskForScheduling = {
-            id: task.id,
-            taskName: task.taskName,
-            deadline: new Date(task.deadline),
-            timeRequired: task.timeRequired,
-            priority: task.priority as TaskPriority
-          };
-
-          const scheduledTime = scheduleTask(taskForScheduling, [
-            ...existingEvents,
-            ...Array.from(taskSchedule.values())
-          ]);
-          taskSchedule.set(task.id, scheduledTime);
-        }
-        
-        // Convert tasks to calendar events with proper date handling
-        const calendarEvents = sortedTasks.map((task: any) => {
-          const scheduledTime = taskSchedule.get(task.id) || {
-            start: new Date(new Date(task.deadline).getTime() - task.timeRequired * 60000),
-            end: new Date(task.deadline)
-          };
-          
-          return {
-            id: task.id.toString(),
+        const taskEvents = tasksData
+          .filter((task: any) => task.status !== 'COMPLETED')
+          .map((task: any) => ({
+            id: `task-${task.id}`,
             title: `${task.taskName} (${task.priority})`,
-            start: scheduledTime.start.toISOString(), // Ensure proper date format
-            end: scheduledTime.end.toISOString(),     // Ensure proper date format
+            start: new Date(task.scheduledStart || task.deadline),
+            end: new Date(task.scheduledEnd || task.deadline),
             extendedProps: {
               ...task,
               isTask: true
             },
-            className: `priority-${task.priority.toLowerCase()} ${
-              task.status === 'IN_PROGRESS' ? 'in-progress' : ''
-            } ${task.status === 'BLOCKED' ? 'blocked' : ''} ${
-              selectedEventId === task.id.toString() ? 'selected-event' : ''
-            }`,
-          };
-        });
-        
-        // Debug logging
-        console.log('Active Tasks:', activeTasks.length);
-        console.log('Calendar Events:', calendarEvents.length);
-        
-        setEvents([...existingEvents, ...calendarEvents]);
+            backgroundColor: task.priority === 'URGENT' ? '#ef4444' : 
+                           task.priority === 'HIGH' ? '#f97316' :
+                           task.priority === 'MEDIUM' ? '#eab308' : '#22c55e',
+            borderColor: 'transparent',
+            textColor: 'white',
+            className: `task-event priority-${task.priority.toLowerCase()}`
+          }));
+
+        console.log('Formatted Task Events:', taskEvents);
+        setTasks(taskEvents);
+        combineAndSetEvents(googleEvents, taskEvents);
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
     }
   };
+
+  const fetchGoogleEvents = async () => {
+    try {
+      const response = await fetch('/api/google-calendar/events');
+      if (response.ok) {
+        const events = await response.json();
+        console.log('Fetched Google Calendar events:', events);
+
+        if (Array.isArray(events)) {
+          const formattedEvents = events.map(event => ({
+            id: `google-${event.googleCalendarEventId}`,
+            title: event.title,
+            start: new Date(event.startTime),
+            end: new Date(event.endTime),
+            allDay: event.isAllDay,
+            extendedProps: {
+              ...event,
+              isGoogleEvent: true
+            },
+            backgroundColor: 'rgb(66, 133, 244)',
+            borderColor: 'rgb(66, 133, 244)',
+            textColor: 'white',
+            className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
+          }));
+
+          console.log('Formatted Google events:', formattedEvents);
+          setGoogleEvents(formattedEvents);
+          return formattedEvents;
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching Google Calendar events:', error);
+      return [];
+    }
+  };
+
+  const fetchAndScheduleTasks = async (calendarEvents: EventInput[]) => {
+    try {
+      const response = await fetch('/api/tasks');
+      if (response.ok) {
+        const tasksData = await response.json();
+        console.log('Fetched Tasks:', tasksData);
+        
+        const existingEvents = calendarEvents.map(event => ({
+          start: new Date(event.start as string),
+          end: new Date(event.end as string),
+          allDay: event.allDay,
+          title: event.title as string
+        }));
+
+        const sortedTasks = tasksData
+          .filter((task: any) => task.status !== 'COMPLETED')
+          .sort((a: TaskWithPriority, b: TaskWithPriority) => {
+            const priorityOrder = {
+              'URGENT': 0,
+              'HIGH': 1,
+              'MEDIUM': 2,
+              'LOW': 3
+            } as const;
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          });
+
+        const taskEvents = [];
+        for (const task of sortedTasks) {
+          const scheduledSlot = scheduleTask(task, existingEvents);
+          
+          const taskEvent = {
+            id: `task-${task.id}`,
+            title: `${task.taskName} (${task.priority})`,
+            start: scheduledSlot.start,
+            end: scheduledSlot.end,
+            extendedProps: {
+              ...task,
+              isTask: true,
+              scheduledStart: scheduledSlot.start,
+              scheduledEnd: scheduledSlot.end
+            },
+            backgroundColor: task.priority === 'URGENT' ? '#ef4444' : 
+                           task.priority === 'HIGH' ? '#f97316' :
+                           task.priority === 'MEDIUM' ? '#eab308' : '#22c55e',
+            borderColor: 'transparent',
+            textColor: 'white',
+            className: `task-event priority-${task.priority.toLowerCase()}`
+          };
+
+          existingEvents.push({
+            start: scheduledSlot.start,
+            end: scheduledSlot.end,
+            title: task.taskName,
+            allDay: false
+          });
+
+          taskEvents.push(taskEvent);
+          
+          console.log('Scheduled task:', {
+            taskName: task.taskName,
+            priority: task.priority,
+            start: scheduledSlot.start,
+            end: scheduledSlot.end,
+            duration: task.timeRequired
+          });
+        }
+
+        console.log('Scheduled Task Events:', taskEvents);
+        setTasks(taskEvents);
+        return taskEvents;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      return [];
+    }
+  };
+
+  const combineAndSetEvents = (calendarEvents: EventInput[], taskEvents: EventInput[]) => {
+    console.log('Combining events:', {
+      googleEvents: calendarEvents.length,
+      taskEvents: taskEvents.length
+    });
+    
+    const combinedEvents = [...calendarEvents, ...taskEvents];
+    console.log('Combined events:', combinedEvents);
+    setEvents(combinedEvents);
+  };
+
+  const loadAllEvents = async () => {
+    setIsLoading(true);
+    try {
+      const calendarEvents = await fetchGoogleEvents();
+      const taskEvents = await fetchAndScheduleTasks(calendarEvents);
+      combineAndSetEvents(calendarEvents, taskEvents);
+    } catch (error) {
+      console.error('Error loading events:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      console.log('Starting initial load...');
+      loadAllEvents();
+    }
+  }, [user, refreshKey]);
 
   const handleTaskUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -222,9 +301,8 @@ const CalendarView: React.FC = () => {
       api.changeView(view);
       setCurrentView(api.view.type);
       
-      // Scroll to current time when switching to week or day view
       if (view === 'timeGridWeek' || view === 'timeGridDay') {
-        setTimeout(scrollToCurrentTime, 100); // Small delay to ensure view is rendered
+        setTimeout(scrollToCurrentTime, 100);
       }
     }
   };
@@ -267,7 +345,6 @@ const CalendarView: React.FC = () => {
     return null;
   };
 
-  // Function to scroll to current time in timeGrid views
   const scrollToCurrentTime = () => {
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
@@ -275,10 +352,9 @@ const CalendarView: React.FC = () => {
 
       if (currentView.type === 'timeGridWeek' || currentView.type === 'timeGridDay') {
         const now = new Date();
-        // Convert current time to duration format (HH:mm:ss)
         const scrollTime = {
           hours: now.getHours(),
-          minutes: Math.max(0, now.getMinutes() - 30), // Subtract 30 minutes but don't go below 0
+          minutes: Math.max(0, now.getMinutes() - 30),
           seconds: 0
         };
         
@@ -287,69 +363,88 @@ const CalendarView: React.FC = () => {
     }
   };
 
-  // Add effect to handle initial scroll on view mount
   useEffect(() => {
     if (currentView === 'timeGridWeek' || currentView === 'timeGridDay') {
       scrollToCurrentTime();
     }
   }, [currentView]);
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  const renderEventContent = (eventInfo: any) => {
+    const isGoogleEvent = eventInfo.event.extendedProps.isGoogleEvent;
+    
+    return (
+      <div className={`event-content ${isGoogleEvent ? 'google-event' : 'task-event'}`}>
+        <div className="event-title">
+          {isGoogleEvent && <span className="google-icon">📅</span>}
+          {eventInfo.event.title}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="container mx-auto p-4" onClick={handleContainerClick}>
-      <div className="mb-4 flex flex-col sm:flex-row sm:justify-end gap-2">
-        <AddEventButton onEventAdded={handleTaskUpdate} />
-        {windowWidth <= 620 && renderViewSelector()}
+      <div className="mb-4 flex flex-col sm:flex-row sm:justify-between gap-2">
+        <div className="flex gap-2">
+          <AddEventButton onEventAdded={() => {
+            fetchTasks();
+            setRefreshKey(prev => prev + 1);
+          }} />
+          {windowWidth <= 620 && renderViewSelector()}
+        </div>
       </div>
       <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
-        <FullCalendar
-          ref={calendarRef}
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView={currentView}
-          events={events}
-          eventClick={handleEventClick}
-          headerToolbar={windowWidth <= 620 ? {
-            left: 'title',
-            center: '',
-            right: 'prev,next,today'
-          } : {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          }}
-          height="auto"
-          dayMaxEvents={2}
-          dayMaxEventRows={2}
-          scrollTime="06:00:00"
-          slotMinTime="06:00:00"
-          slotMaxTime="22:00:00"
-          nowIndicator={true}
-          views={{
-            dayGridMonth: {
-              dayMaxEvents: 2,
-              dayMaxEventRows: 2,
-              moreLinkText: count => `+${count} more`,
-              moreLinkClick: 'day'
-            },
-            timeGridWeek: {
-              dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
-              slotDuration: '00:30:00',
-              slotLabelInterval: '01:00',
-            },
-            timeGridDay: {
-              dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
-              slotDuration: '00:30:00',
-              slotLabelInterval: '01:00',
-            }
-          }}
-        />
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <span className="text-gray-500">Loading calendar...</span>
+          </div>
+        ) : (
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView={currentView}
+            events={events}
+            eventClick={handleEventClick}
+            headerToolbar={windowWidth <= 620 ? {
+              left: 'title',
+              center: '',
+              right: 'prev,next,today'
+            } : {
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }}
+            height="auto"
+            eventContent={renderEventContent}
+            allDaySlot={true}
+            allDayText="All Day"
+            views={{
+              dayGridMonth: {
+                dayMaxEventRows: 2,
+                moreLinkText: count => `+${count} more`,
+                moreLinkClick: 'day'
+              },
+              timeGridWeek: {
+                allDaySlot: true,
+                dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
+                slotDuration: '00:30:00',
+                slotLabelInterval: '01:00',
+              },
+              timeGridDay: {
+                allDaySlot: true,
+                dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
+                slotDuration: '00:30:00',
+                slotLabelInterval: '01:00',
+              }
+            }}
+          />
+        )}
       </div>
       <TaskList 
         refreshTrigger={refreshKey} 
-        onTaskUpdate={handleTaskUpdate}
+        onTaskUpdate={() => {
+          fetchTasks();
+          setRefreshKey(prev => prev + 1);
+        }}
         editingTask={selectedTask}
         isEditDialogOpen={isEditDialogOpen}
         setIsEditDialogOpen={setIsEditDialogOpen}

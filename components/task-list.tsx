@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { useAuthContext } from '../contexts/AuthContext';
 import { Button } from './ui/button';
 import {
@@ -115,6 +115,17 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate, e
       default:
         return <Circle className="text-violet-300" />;
     }
+  };
+
+  // Add a helper function to safely format dates
+  const formatDateForInput = (date: Date | string | null): string => {
+    if (!date) return format(new Date(), "yyyy-MM-dd'T'HH:mm");
+    
+    const dateObj = date instanceof Date ? date : new Date(date);
+    
+    return isValid(dateObj) 
+      ? format(dateObj, "yyyy-MM-dd'T'HH:mm")
+      : format(new Date(), "yyyy-MM-dd'T'HH:mm");
   };
 
   return (
@@ -232,7 +243,7 @@ const TaskList: React.FC<TaskListProps> = ({ refreshTrigger = 0, onTaskUpdate, e
                 <input
                   type="datetime-local"
                   name="deadline"
-                  defaultValue={format(new Date(editingTask.deadline), "yyyy-MM-dd'T'HH:mm")}
+                  defaultValue={formatDateForInput(editingTask.deadline)}
                   className="w-full p-2 border rounded"
                 />
               </div>

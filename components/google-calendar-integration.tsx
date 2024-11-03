@@ -5,6 +5,14 @@ import { Button } from '@/components/ui/button';
 import { useUser } from '@clerk/nextjs';
 import { Calendar, RefreshCw } from 'lucide-react';
 
+// Declare global type for Google API
+declare global {
+  interface Window {
+    gapi: any;
+  }
+}
+
+// Use existing environment variable
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
@@ -18,6 +26,11 @@ const GoogleCalendarIntegration: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      console.error('Google Client ID is not configured');
+      return;
+    }
+
     // Load the Google API client library
     const loadGoogleApi = () => {
       const script = document.createElement('script');
@@ -33,6 +46,8 @@ const GoogleCalendarIntegration: React.FC = () => {
   }, []);
 
   const initClient = () => {
+    if (!GOOGLE_CLIENT_ID) return;
+
     window.gapi.client.init({
       clientId: GOOGLE_CLIENT_ID,
       scope: SCOPES,
@@ -43,6 +58,8 @@ const GoogleCalendarIntegration: React.FC = () => {
         setIsConnected(true);
         checkLastSync();
       }
+    }).catch((error: any) => {
+      console.error('Error initializing Google API client:', error);
     });
   };
 
