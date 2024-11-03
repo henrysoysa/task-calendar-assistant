@@ -14,7 +14,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,13 +22,14 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { Button } from './ui/button';
-import { ChevronDown } from 'lucide-react';
-import { startOfDay, isAfter } from 'date-fns';
+import { ChevronDown, X } from 'lucide-react';
+import { startOfDay, isAfter, format, endOfDay, differenceInHours, isSameHour } from 'date-fns';
 import { 
   scheduleTask, 
   scheduleMultipleTasks, 
   hasOverlap, 
-  needsRescheduling 
+  needsRescheduling,
+  WORKING_HOURS 
 } from '../lib/scheduling';
 import GoogleCalendarIntegration from './google-calendar-integration';
 import { useUser } from '@clerk/nextjs';
@@ -49,6 +50,8 @@ const CalendarView: React.FC = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [googleEvents, setGoogleEvents] = useState<any[]>([]);
   const { user } = useUser();
+  const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<any>(null);
+  const [isGoogleEventModalOpen, setIsGoogleEventModalOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -143,19 +146,65 @@ const CalendarView: React.FC = () => {
       } ${selectedEventId === `task-${task.id}` ? 'selected-event' : ''}`
     }));
 
-    const googleCalendarEvents = googleEvents.map(event => ({
-      id: `google-${event.googleCalendarEventId}`,
-      title: event.title,
-      start: new Date(event.startTime),
-      end: new Date(event.endTime),
-      extendedProps: {
-        ...event,
-        isGoogleEvent: true
-      },
-      className: `google-calendar-event ${
-        selectedEventId === `google-${event.googleCalendarEventId}` ? 'selected-event' : ''
-      }`
-    }));
+    const googleCalendarEvents = googleEvents.map(event => {
+      if (event.isAllDay) {
+        const startDate = startOfDay(new Date(event.startTime));
+        const endDate = startOfDay(new Date(event.endTime));
+        
+        return {
+          id: `google-${event.googleCalendarEventId}`,
+          title: event.title,
+          start: startDate,
+          end: endDate,
+          allDay: true,
+          extendedProps: {
+            ...event,
+            isGoogleEvent: true
+          },
+          className: `google-calendar-event all-day-event ${
+            selectedEventId === `google-${event.googleCalendarEventId}` ? 'selected-event' : ''
+          }`
+        };
+      }
+
+      const startTime = new Date(event.startTime);
+      const endTime = new Date(event.endTime);
+      const is24HourEvent = differenceInHours(endTime, startTime) === 24;
+      const startsAt1AM = startTime.getHours() === 1 && startTime.getMinutes() === 0;
+      const endsAt1AM = endTime.getHours() === 1 && endTime.getMinutes() === 0;
+
+      if (is24HourEvent && startsAt1AM && endsAt1AM) {
+        return {
+          id: `google-${event.googleCalendarEventId}`,
+          title: event.title,
+          start: startOfDay(startTime),
+          end: startOfDay(endTime),
+          allDay: true,
+          extendedProps: {
+            ...event,
+            isGoogleEvent: true
+          },
+          className: `google-calendar-event all-day-event ${
+            selectedEventId === `google-${event.googleCalendarEventId}` ? 'selected-event' : ''
+          }`
+        };
+      }
+
+      return {
+        id: `google-${event.googleCalendarEventId}`,
+        title: event.title,
+        start: startTime,
+        end: endTime,
+        allDay: false,
+        extendedProps: {
+          ...event,
+          isGoogleEvent: true
+        },
+        className: `google-calendar-event ${
+          selectedEventId === `google-${event.googleCalendarEventId}` ? 'selected-event' : ''
+        }`
+      };
+    });
 
     return [...taskEvents, ...googleCalendarEvents];
   };
@@ -164,8 +213,14 @@ const CalendarView: React.FC = () => {
     if (user) {
       fetchTasks();
       fetchGoogleEvents();
+
+      const syncInterval = setInterval(() => {
+        fetchGoogleEvents();
+      }, 5 * 60 * 1000);
+
+      return () => clearInterval(syncInterval);
     }
-  }, [user, refreshKey]);
+  }, [user]);
 
   const handleTaskUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -180,14 +235,23 @@ const CalendarView: React.FC = () => {
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     clickInfo.jsEvent.stopPropagation();
-    const taskId = clickInfo.event.id;
+    const eventId = clickInfo.event.id;
+    const isGoogleEvent = clickInfo.event.extendedProps.isGoogleEvent;
     
-    setSelectedEventId(prevId => prevId === taskId ? null : taskId);
+    // Handle single click
+    setSelectedEventId(prevId => prevId === eventId ? null : eventId);
     
+    // Handle double click
     if (clickInfo.jsEvent.detail === 2) {
-      const task = clickInfo.event.extendedProps;
-      setSelectedTask(task);
-      setIsEditDialogOpen(true);
+      if (isGoogleEvent) {
+        // Open Google Calendar event preview
+        setSelectedGoogleEvent(clickInfo.event.extendedProps);
+        setIsGoogleEventModalOpen(true);
+      } else {
+        // Open task edit modal (existing behavior)
+        setSelectedTask(clickInfo.event.extendedProps);
+        setIsEditDialogOpen(true);
+      }
     }
   };
 
@@ -309,24 +373,90 @@ const CalendarView: React.FC = () => {
           nowIndicator={true}
           views={{
             dayGridMonth: {
-              dayMaxEvents: 2,
               dayMaxEventRows: 2,
               moreLinkText: count => `+${count} more`,
               moreLinkClick: 'day'
             },
             timeGridWeek: {
+              allDaySlot: true,
+              allDayText: 'All Day',
               dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
               slotDuration: '00:30:00',
               slotLabelInterval: '01:00',
             },
             timeGridDay: {
+              allDaySlot: true,
+              allDayText: 'All Day',
               dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
               slotDuration: '00:30:00',
               slotLabelInterval: '01:00',
             }
           }}
+          eventDisplay="block"
+          displayEventEnd={true}
         />
       </div>
+
+      {/* Google Calendar Event Preview Modal */}
+      <Dialog 
+        open={isGoogleEventModalOpen} 
+        onOpenChange={setIsGoogleEventModalOpen}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedGoogleEvent?.title}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedGoogleEvent && (
+            <div className="space-y-4 mt-2">
+              {/* Time/Date Information */}
+              <div>
+                {selectedGoogleEvent.isAllDay ? (
+                  <p className="text-gray-600">
+                    All day: {format(new Date(selectedGoogleEvent.startTime), 'MMMM d, yyyy')}
+                  </p>
+                ) : (
+                  <p className="text-gray-600">
+                    {format(new Date(selectedGoogleEvent.startTime), 'MMMM d, yyyy h:mm a')} -
+                    {format(new Date(selectedGoogleEvent.endTime), 'h:mm a')}
+                  </p>
+                )}
+              </div>
+
+              {/* Description */}
+              {selectedGoogleEvent.description && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700">Description</h3>
+                  <p className="text-gray-600 whitespace-pre-wrap mt-1">
+                    {selectedGoogleEvent.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Calendar Indicator */}
+              <div className="flex items-center gap-2 text-sm text-gray-600 pt-2">
+                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                <span>Google Calendar Event</span>
+              </div>
+
+              {/* Recurring Event Indicator */}
+              {selectedGoogleEvent.isRecurring && (
+                <div className="text-sm text-gray-600 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Recurring event</span>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Existing Task Edit Modal */}
       <TaskList 
         refreshTrigger={refreshKey} 
         onTaskUpdate={handleTaskUpdate}
@@ -441,6 +571,15 @@ const CalendarView: React.FC = () => {
             font-size: 1.2rem;
             color: rgb(139, 92, 246); /* violet-500 */
           }
+        }
+
+        /* Google Calendar Event Modal Styles */
+        .google-event-modal {
+          @apply bg-white rounded-lg shadow-xl;
+        }
+
+        .google-event-modal-header {
+          @apply border-b border-gray-200 px-6 py-4;
         }
       `}</style>
     </div>

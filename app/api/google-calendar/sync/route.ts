@@ -3,6 +3,7 @@ import { google } from 'googleapis';
 import { getAuth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { NextRequest } from 'next/server';
+import { startOfDay, endOfDay, addDays, differenceInHours, isSameHour } from 'date-fns';
 
 export async function POST(request: NextRequest) {
   const { userId } = getAuth(request);
@@ -12,9 +13,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    console.log('Starting sync for user:', userId);
-    
-    // Get user's Google Calendar credentials
     const credentials = await prisma.googleCalendarCredentials.findUnique({
       where: { userId }
     });
@@ -23,26 +21,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    // Initialize Google Calendar API
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET
     );
-    oauth2Client.setCredentials({ 
-      access_token: credentials.accessToken,
-      refresh_token: credentials.refreshToken 
-    });
+    oauth2Client.setCredentials({ access_token: credentials.accessToken });
     
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // Get events from the last month to next month
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
     
     const oneMonthAhead = new Date();
     oneMonthAhead.setMonth(oneMonthAhead.getMonth() + 1);
-
-    console.log('Fetching events from:', oneMonthAgo, 'to:', oneMonthAhead);
 
     const events = await calendar.events.list({
       calendarId: 'primary',
@@ -53,22 +44,46 @@ export async function POST(request: NextRequest) {
       orderBy: 'startTime',
     });
 
-    console.log('Found events:', events.data.items?.length);
-
-    // Convert and save events
     if (events.data.items?.length) {
-      const formattedEvents = events.data.items.map(event => ({
-        googleCalendarEventId: event.id!,
-        credentialsId: credentials.id,
-        title: event.summary || 'Untitled Event',
-        description: event.description,
-        startTime: new Date(event.start?.dateTime || event.start?.date!),
-        endTime: new Date(event.end?.dateTime || event.end?.date!),
-        isRecurring: !!event.recurringEventId,
-        recurringEventId: event.recurringEventId
-      }));
+      const formattedEvents = events.data.items.map(event => {
+        const isGoogleAllDay = Boolean(event.start?.date);
+        let startTime: Date, endTime: Date;
+        let isAllDay = isGoogleAllDay;
 
-      // Delete existing events and insert new ones
+        if (event.start?.dateTime && event.end?.dateTime) {
+          startTime = new Date(event.start.dateTime);
+          endTime = new Date(event.end.dateTime);
+
+          const is24HourEvent = differenceInHours(endTime, startTime) === 24;
+          const startsAt1AM = startTime.getHours() === 1 && startTime.getMinutes() === 0;
+          const endsAt1AM = endTime.getHours() === 1 && endTime.getMinutes() === 0;
+
+          if (is24HourEvent && startsAt1AM && endsAt1AM) {
+            isAllDay = true;
+            startTime = startOfDay(startTime);
+            endTime = startOfDay(endTime);
+          }
+        } else if (isGoogleAllDay && event.start?.date && event.end?.date) {
+          startTime = new Date(event.start.date);
+          endTime = new Date(event.end.date);
+        } else {
+          startTime = new Date();
+          endTime = addDays(startTime, 1);
+        }
+
+        return {
+          googleCalendarEventId: event.id!,
+          credentialsId: credentials.id,
+          title: event.summary || 'Untitled Event',
+          description: event.description || null,
+          startTime,
+          endTime,
+          isAllDay,
+          isRecurring: Boolean(event.recurringEventId),
+          recurringEventId: event.recurringEventId || null
+        };
+      });
+
       await prisma.$transaction([
         prisma.googleCalendarEvent.deleteMany({
           where: { credentialsId: credentials.id }
@@ -78,13 +93,10 @@ export async function POST(request: NextRequest) {
         })
       ]);
 
-      // Update last sync time
       await prisma.googleCalendarCredentials.update({
         where: { id: credentials.id },
         data: { lastSyncedAt: new Date() }
       });
-
-      console.log('Successfully synced events:', formattedEvents.length);
     }
 
     return NextResponse.json({ 

@@ -67,7 +67,7 @@ const GoogleCalendarIntegration: React.FC<{ onSync: () => void }> = ({ onSync })
       const googleUser = await auth.signIn();
       const authResponse = googleUser.getAuthResponse();
       
-      // Send token to backend
+      // Send tokens to backend
       const response = await fetch('/api/google-calendar/connect', {
         method: 'POST',
         headers: {
@@ -75,13 +75,15 @@ const GoogleCalendarIntegration: React.FC<{ onSync: () => void }> = ({ onSync })
         },
         body: JSON.stringify({
           token: authResponse.access_token,
-          userId: user?.id
+          refreshToken: googleUser.getAuthResponse(true).refresh_token,
         }),
       });
 
       if (response.ok) {
         setIsConnected(true);
         await syncEvents();
+      } else {
+        console.error('Failed to connect Google Calendar');
       }
     } catch (error) {
       console.error('Error connecting to Google Calendar:', error);
