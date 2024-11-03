@@ -33,6 +33,7 @@ import {
 } from '../lib/scheduling';
 import GoogleCalendarIntegration from './google-calendar-integration';
 import { useUser } from '@clerk/nextjs';
+import { Task } from '@/types/index';
 
 const CalendarView: React.FC = () => {
   const { userId, loading } = useAuthContext();
@@ -48,7 +49,7 @@ const CalendarView: React.FC = () => {
   const calendarRef = useRef<FullCalendar | null>(null);
   const [lastScheduledDate, setLastScheduledDate] = useState<Date>(new Date());
   const [tasks, setTasks] = useState<any[]>([]);
-  const [googleEvents, setGoogleEvents] = useState<any[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<EventInput[]>([]);
   const { user } = useUser();
   const [selectedGoogleEvent, setSelectedGoogleEvent] = useState<any>(null);
   const [isGoogleEventModalOpen, setIsGoogleEventModalOpen] = useState(false);
@@ -64,6 +65,8 @@ const CalendarView: React.FC = () => {
 
   useEffect(() => {
     if (userId) {
+      console.log('Fetching all events...');
+      fetchGoogleEvents();
       fetchTasks();
     }
   }, [userId, refreshKey]);
@@ -107,27 +110,84 @@ const CalendarView: React.FC = () => {
     localStorage.setItem('lastScheduledDate', lastScheduledDate.toISOString());
   }, [lastScheduledDate]);
 
-  const fetchTasks = async () => {
-    try {
-      const response = await fetch('/api/tasks');
-      if (response.ok) {
-        const tasks = await response.json();
-        setTasks(tasks);
-      }
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-    }
-  };
-
   const fetchGoogleEvents = async () => {
     try {
       const response = await fetch('/api/google-calendar/events');
       if (response.ok) {
-        const events = await response.json();
-        setGoogleEvents(events);
+        const data = await response.json();
+        console.log('Fetched Google Events:', data);
+
+        const formattedGoogleEvents = data.map((event: any) => ({
+          id: `google-${event.googleCalendarEventId}`,
+          title: event.title,
+          start: new Date(event.startTime).toISOString(),
+          end: new Date(event.endTime).toISOString(),
+          allDay: event.isAllDay,
+          extendedProps: {
+            ...event,
+            isGoogleEvent: true
+          },
+          backgroundColor: 'rgb(66, 133, 244)',
+          borderColor: 'rgb(66, 133, 244)',
+          textColor: 'white',
+          className: 'google-calendar-event'
+        }));
+
+        console.log('Formatted Google Events:', formattedGoogleEvents);
+        setGoogleEvents(formattedGoogleEvents);
       }
     } catch (error) {
       console.error('Error fetching Google Calendar events:', error);
+    }
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const response = await fetch('/api/tasks');
+      if (response.ok) {
+        const tasks: Task[] = await response.json();
+        console.log('Fetched Tasks:', tasks);
+        
+        const taskEvents = tasks
+          .filter(task => task.status !== 'COMPLETED')
+          .map(task => {
+            const deadline = new Date(task.deadline);
+            const startTime = new Date(deadline.getTime() - (task.timeRequired * 60 * 1000));
+            
+            console.log('Creating calendar event for task:', {
+              taskId: task.id,
+              taskName: task.taskName,
+              startTime: startTime.toISOString(),
+              deadline: deadline.toISOString(),
+              duration: task.timeRequired
+            });
+
+            return {
+              id: `task-${task.id}`,
+              title: `${task.taskName} (${task.priority})`,
+              start: startTime.toISOString(),
+              end: deadline.toISOString(),
+              extendedProps: {
+                ...task,
+                isTask: true
+              },
+              display: 'block',
+              backgroundColor: task.priority === 'URGENT' ? '#ef4444' : 
+                             task.priority === 'HIGH' ? '#f97316' :
+                             task.priority === 'MEDIUM' ? '#eab308' : '#22c55e',
+              borderColor: 'transparent',
+              textColor: 'white',
+              className: `task-event priority-${task.priority.toLowerCase()}`
+            };
+          });
+
+        // Combine with Google Calendar events
+        const allEvents = [...googleEvents, ...taskEvents];
+        console.log('Setting all events:', allEvents);
+        setEvents(allEvents);
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
     }
   };
 
@@ -334,6 +394,14 @@ const CalendarView: React.FC = () => {
     }
   }, [currentView]);
 
+  // Add effect to update events when Google events change
+  useEffect(() => {
+    if (events.length > 0) {
+      const taskEvents = events.filter(event => !event.extendedProps?.isGoogleEvent);
+      setEvents([...googleEvents, ...taskEvents]);
+    }
+  }, [googleEvents]);
+
   if (loading) {
     return <div>Loading...</div>;
   }
@@ -352,9 +420,8 @@ const CalendarView: React.FC = () => {
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={currentView}
-          events={getCalendarEvents()}
+          events={events}
           eventClick={handleEventClick}
-          eventContent={renderEventContent}
           headerToolbar={windowWidth <= 620 ? {
             left: 'title',
             center: '',
@@ -365,35 +432,18 @@ const CalendarView: React.FC = () => {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           height="auto"
-          dayMaxEvents={2}
-          dayMaxEventRows={2}
-          scrollTime="06:00:00"
+          eventDisplay="block"
+          eventTimeFormat={{
+            hour: 'numeric',
+            minute: '2-digit',
+            meridiem: 'short'
+          }}
           slotMinTime="06:00:00"
           slotMaxTime="22:00:00"
           nowIndicator={true}
-          views={{
-            dayGridMonth: {
-              dayMaxEventRows: 2,
-              moreLinkText: count => `+${count} more`,
-              moreLinkClick: 'day'
-            },
-            timeGridWeek: {
-              allDaySlot: true,
-              allDayText: 'All Day',
-              dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
-              slotDuration: '00:30:00',
-              slotLabelInterval: '01:00',
-            },
-            timeGridDay: {
-              allDaySlot: true,
-              allDayText: 'All Day',
-              dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
-              slotDuration: '00:30:00',
-              slotLabelInterval: '01:00',
-            }
+          eventDidMount={(info) => {
+            console.log('Event mounted:', info.event.title);
           }}
-          eventDisplay="block"
-          displayEventEnd={true}
         />
       </div>
 
