@@ -1,128 +1,158 @@
 import { TimeSlot, Task, Event } from '../types/index';
-import { startOfDay, endOfDay, addDays, isAfter, isBefore, addMinutes } from 'date-fns';
+import { 
+  startOfDay, 
+  endOfDay, 
+  addDays, 
+  isAfter, 
+  isBefore, 
+  addMinutes,
+  setHours,
+  setMinutes,
+  isWeekend,
+  getDay
+} from 'date-fns';
 
-const PRIORITY_WEIGHTS = {
-  'URGENT': 4,
-  'HIGH': 3,
-  'MEDIUM': 2,
-  'LOW': 1
-} as const;
+// Working hours configuration
+const WORKING_HOURS = {
+  start: 8, // 8 AM
+  end: 18,  // 6 PM
+  workingDays: [1, 2, 3, 4, 5] // Monday to Friday (0 = Sunday, 1 = Monday, etc.)
+};
 
-// Find all available time slots in a given date range
-const findAvailableSlots = (
-  startDate: Date,
-  endDate: Date,
+// Check if a given time is within working hours
+const isWithinWorkingHours = (date: Date): boolean => {
+  const hour = date.getHours();
+  const day = getDay(date);
+  
+  return (
+    WORKING_HOURS.workingDays.includes(day) &&
+    hour >= WORKING_HOURS.start &&
+    hour < WORKING_HOURS.end
+  );
+};
+
+// Get next working hour start time from a given date
+const getNextWorkingTime = (date: Date): Date => {
+  let nextTime = new Date(date);
+  
+  // If it's weekend, move to Monday
+  while (isWeekend(nextTime)) {
+    nextTime = addDays(nextTime, 1);
+  }
+  
+  // Set to start of working hours if outside working hours
+  const hour = nextTime.getHours();
+  if (hour < WORKING_HOURS.start) {
+    nextTime = setHours(nextTime, WORKING_HOURS.start);
+    nextTime = setMinutes(nextTime, 0);
+  } else if (hour >= WORKING_HOURS.end) {
+    // Move to next working day
+    nextTime = addDays(nextTime, 1);
+    nextTime = setHours(nextTime, WORKING_HOURS.start);
+    nextTime = setMinutes(nextTime, 0);
+  }
+  
+  return nextTime;
+};
+
+// Find all available time slots in a given day
+const findDailySlots = (
+  date: Date,
   existingEvents: Event[],
-  minimumDuration: number = 30 // minimum slot size in minutes
+  minimumDuration: number = 30
 ): TimeSlot[] => {
   const slots: TimeSlot[] = [];
-  let currentDate = startOfDay(startDate);
-  const lastDate = endOfDay(endDate);
+  const dayStart = setHours(startOfDay(date), WORKING_HOURS.start);
+  const dayEnd = setHours(startOfDay(date), WORKING_HOURS.end);
 
-  // If no events, return the entire time range as one slot
-  if (!existingEvents.length) {
-    return [{
-      start: currentDate,
-      end: lastDate
-    }];
-  }
+  // Filter events for this day
+  const dayEvents = existingEvents.filter(event => 
+    isBefore(event.start, dayEnd) && isAfter(event.end, dayStart)
+  ).sort((a, b) => a.start.getTime() - b.start.getTime());
 
-  // Sort events chronologically
-  const sortedEvents = [...existingEvents].sort((a, b) => 
-    a.start.getTime() - b.start.getTime()
-  );
+  let currentTime = dayStart;
 
-  // Check for slot before first event
-  if (sortedEvents[0].start > currentDate) {
-    slots.push({
-      start: currentDate,
-      end: sortedEvents[0].start
-    });
-  }
-
-  // Find gaps between events
-  for (let i = 0; i < sortedEvents.length - 1; i++) {
-    const gapStart = sortedEvents[i].end;
-    const gapEnd = sortedEvents[i + 1].start;
-    const duration = (gapEnd.getTime() - gapStart.getTime()) / (1000 * 60); // duration in minutes
+  // Handle gaps between events
+  for (let i = 0; i <= dayEvents.length; i++) {
+    const slotEnd = i < dayEvents.length ? dayEvents[i].start : dayEnd;
+    const duration = (slotEnd.getTime() - currentTime.getTime()) / (1000 * 60);
 
     if (duration >= minimumDuration) {
       slots.push({
-        start: gapStart,
-        end: gapEnd
+        start: currentTime,
+        end: slotEnd
       });
     }
-  }
 
-  // Check for slot after last event
-  const lastEvent = sortedEvents[sortedEvents.length - 1];
-  if (lastEvent.end < lastDate) {
-    slots.push({
-      start: lastEvent.end,
-      end: lastDate
-    });
+    if (i < dayEvents.length) {
+      currentTime = new Date(dayEvents[i].end);
+    }
   }
 
   return slots;
 };
 
-// Check if a slot can fit a task
-const canFitTask = (slot: TimeSlot, taskDuration: number): boolean => {
-  const slotDuration = (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
-  return slotDuration >= taskDuration;
-};
+// Find all available slots within working hours
+const findAvailableSlots = (
+  startDate: Date,
+  endDate: Date,
+  existingEvents: Event[],
+  minimumDuration: number = 30
+): TimeSlot[] => {
+  const slots: TimeSlot[] = [];
+  let currentDate = startOfDay(startDate);
+  const lastDate = endOfDay(endDate);
 
-// Find the best slot for a task based on priority and deadline
-const findBestSlot = (
-  task: Task,
-  availableSlots: TimeSlot[],
-  existingEvents: Event[]
-): TimeSlot | null => {
-  const validSlots = availableSlots.filter(slot => 
-    canFitTask(slot, task.timeRequired) && 
-    isBefore(addMinutes(slot.start, task.timeRequired), task.deadline)
-  );
-
-  if (!validSlots.length) return null;
-
-  // For urgent/high priority tasks, use earliest available slot
-  if (PRIORITY_WEIGHTS[task.priority] >= PRIORITY_WEIGHTS.HIGH) {
-    return validSlots[0];
+  while (currentDate < lastDate) {
+    if (WORKING_HOURS.workingDays.includes(getDay(currentDate))) {
+      const dailySlots = findDailySlots(currentDate, existingEvents, minimumDuration);
+      slots.push(...dailySlots);
+    }
+    currentDate = addDays(currentDate, 1);
   }
 
-  // For medium priority, try to find a slot closer to the middle of the available time
-  if (task.priority === 'MEDIUM') {
-    const middleIndex = Math.floor(validSlots.length / 2);
-    return validSlots[middleIndex];
-  }
-
-  // For low priority tasks, use later slots
-  return validSlots[validSlots.length - 1];
+  return slots;
 };
 
 // Schedule a single task
 const scheduleTask = (task: Task, existingEvents: Event[]): TimeSlot => {
-  const lookAheadDays = 7; // Look ahead window for scheduling
+  const now = new Date();
+  const deadline = new Date(task.deadline);
+  const lookAheadDays = 14; // Look ahead window for scheduling
+
+  // Find all available slots up to the deadline
   const availableSlots = findAvailableSlots(
-    new Date(),
-    addDays(task.deadline, lookAheadDays),
-    existingEvents
+    now,
+    addDays(deadline, lookAheadDays),
+    existingEvents,
+    task.timeRequired
   );
 
-  const bestSlot = findBestSlot(task, availableSlots, existingEvents);
-  
-  if (!bestSlot) {
-    // Fallback to deadline-based scheduling if no suitable slot found
-    const latestStart = new Date(task.deadline.getTime() - task.timeRequired * 60000);
+  // Filter slots that can fit the task and end before deadline
+  const validSlots = availableSlots.filter(slot => {
+    const slotDuration = (slot.end.getTime() - slot.start.getTime()) / (1000 * 60);
+    const taskEnd = addMinutes(slot.start, task.timeRequired);
+    return slotDuration >= task.timeRequired && isBefore(taskEnd, deadline);
+  });
+
+  if (validSlots.length === 0) {
+    // Fallback: schedule at deadline during working hours
+    const latestStart = new Date(deadline);
+    latestStart.setHours(Math.max(WORKING_HOURS.start, deadline.getHours() - Math.ceil(task.timeRequired / 60)));
+    latestStart.setMinutes(deadline.getMinutes());
+    
     return {
       start: latestStart,
-      end: task.deadline
+      end: deadline
     };
   }
 
+  // Choose best slot based on priority and deadline
+  const bestSlot = validSlots[0]; // Use earliest available slot
+  
   return {
     start: bestSlot.start,
-    end: new Date(bestSlot.start.getTime() + task.timeRequired * 60000)
+    end: addMinutes(bestSlot.start, task.timeRequired)
   };
 };
 
@@ -132,9 +162,13 @@ const scheduleMultipleTasks = (tasks: Task[], existingEvents: Event[]): Map<numb
   
   // Sort tasks by priority and deadline
   const sortedTasks = [...tasks].sort((a, b) => {
-    const priorityDiff = PRIORITY_WEIGHTS[b.priority] - PRIORITY_WEIGHTS[a.priority];
-    if (priorityDiff !== 0) return priorityDiff;
-    return a.deadline.getTime() - b.deadline.getTime();
+    // First by deadline
+    const deadlineDiff = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+    if (deadlineDiff !== 0) return deadlineDiff;
+    
+    // Then by priority (higher priority first)
+    const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+    return priorityOrder[a.priority] - priorityOrder[b.priority];
   });
 
   // Schedule each task
@@ -163,11 +197,11 @@ const needsRescheduling = (lastScheduled: Date): boolean => {
 // Single export statement for all functions and constants
 export {
   findAvailableSlots,
-  canFitTask,
-  findBestSlot,
   scheduleTask,
   scheduleMultipleTasks,
   hasOverlap,
   needsRescheduling,
-  PRIORITY_WEIGHTS
+  isWithinWorkingHours,
+  getNextWorkingTime,
+  WORKING_HOURS
 };
