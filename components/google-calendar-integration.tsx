@@ -56,7 +56,7 @@ const GoogleCalendarIntegration: React.FC = () => {
       // Check if already authenticated
       if (window.gapi.auth2.getAuthInstance().isSignedIn.get()) {
         setIsConnected(true);
-        checkLastSync();
+        checkConnectionStatus();
       }
     }).catch((error: any) => {
       console.error('Error initializing Google API client:', error);
@@ -78,28 +78,20 @@ const GoogleCalendarIntegration: React.FC = () => {
     }
   };
 
-  const checkLastSync = async () => {
-    try {
-      const response = await fetch('/api/google-calendar/last-sync');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.lastSync) {
-          setLastSync(new Date(data.lastSync));
-        }
-      }
-    } catch (error) {
-      console.error('Error checking last sync:', error);
-    }
-  };
-
   const handleConnect = async () => {
     try {
       setIsLoading(true);
       const auth = window.gapi.auth2.getAuthInstance();
-      const googleUser = await auth.signIn();
-      const authResponse = googleUser.getAuthResponse();
       
-      // Send token to backend
+      // Configure auth instance to request refresh token
+      const options = {
+        prompt: 'consent',
+        access_type: 'offline'
+      };
+      
+      const googleUser = await auth.signIn(options);
+      const authResponse = googleUser.getAuthResponse(true); // true to get refresh token
+      
       const response = await fetch('/api/google-calendar/connect', {
         method: 'POST',
         headers: {
@@ -107,14 +99,16 @@ const GoogleCalendarIntegration: React.FC = () => {
         },
         body: JSON.stringify({
           token: authResponse.access_token,
-          refreshToken: googleUser.getAuthResponse(true).refresh_token,
-          userId: user?.id
+          refreshToken: authResponse.refresh_token || '', // Provide empty string if no refresh token
         }),
       });
 
       if (response.ok) {
         setIsConnected(true);
         await syncCalendar();
+      } else {
+        const error = await response.json();
+        console.error('Failed to connect:', error);
       }
     } catch (error) {
       console.error('Error connecting to Google Calendar:', error);

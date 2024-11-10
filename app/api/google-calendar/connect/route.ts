@@ -11,31 +11,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { token, refreshToken } = body;
+    const { token, refreshToken } = await request.json();
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Access token is required' },
+        { status: 400 }
+      );
+    }
 
     const credentials = await prisma.googleCalendarCredentials.upsert({
-      where: {
-        userId: userId,
-      },
+      where: { userId },
       update: {
         accessToken: token,
-        refreshToken: refreshToken,
+        ...(refreshToken && { refreshToken }),
         updatedAt: new Date(),
       },
       create: {
-        userId: userId,
+        userId,
         accessToken: token,
-        refreshToken: refreshToken,
+        refreshToken: refreshToken || '',
       },
     });
 
-    return NextResponse.json({
-      status: 'success',
-      credentialsId: credentials.id
-    });
+    return NextResponse.json({ success: true, credentials });
   } catch (error) {
     console.error('Error connecting Google Calendar:', error);
-    return NextResponse.json({ error: 'Failed to connect' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to connect', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 } 

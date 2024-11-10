@@ -12,12 +12,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const credentials = await prisma.googleCalendarCredentials.findUnique({
-      where: { userId }
+      where: { userId },
+      select: {
+        lastSyncedAt: true,
+      },
     });
 
     return NextResponse.json({
       isConnected: !!credentials,
-      lastSync: credentials?.lastSyncedAt
+      lastSync: credentials?.lastSyncedAt || null,
     });
   } catch (error) {
     console.error('Error checking Google Calendar status:', error);
