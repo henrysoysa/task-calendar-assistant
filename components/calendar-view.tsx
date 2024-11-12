@@ -282,9 +282,111 @@ const CalendarView: React.FC = () => {
     }
   }, [user, loadAllEvents]);
 
-  const handleTaskUpdate = () => {
-    setRefreshKey(prev => prev + 1);
-  };
+  const scrollToCurrentTime = useCallback(() => {
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      const now = new Date();
+      const scrollTime = {
+        hours: now.getHours(),
+        minutes: now.getMinutes(),
+        seconds: 0
+      };
+
+      setTimeout(() => {
+        calendarApi.scrollToTime(scrollTime);
+      }, 100);
+    }
+  }, []);
+
+  const handleTaskUpdate = useCallback(async () => {
+    console.log('Task updated, refreshing calendar...');
+    try {
+      // Store current view and calendar API before setting loading state
+      const api = calendarRef.current?.getApi();
+      const currentCalendarView = api?.view.type || currentView;
+      
+      setIsLoading(true);
+      
+      // First, fetch Google Calendar events
+      const calendarEvents = await fetchGoogleEvents();
+      
+      // Then fetch tasks
+      const response = await fetch('/api/tasks');
+      if (!response.ok) {
+        throw new Error('Failed to fetch updated tasks');
+      }
+      const tasksData = await response.json();
+      
+      // Sort tasks by priority and deadline
+      const sortedTasks = tasksData
+        .filter((task: any) => task.status !== 'COMPLETED')
+        .sort((a: any, b: any) => {
+          const priorityOrder = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+          if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          }
+          return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        });
+
+      // Schedule tasks sequentially
+      const scheduledTasks = [];
+      for (const task of sortedTasks) {
+        const existingEvents = [...calendarEvents, ...scheduledTasks];
+        const slot = await scheduleTask(task, existingEvents);
+        
+        const taskEvent = {
+          id: `task-${task.id}`,
+          title: `${task.taskName} (${task.priority})`,
+          start: slot.start,
+          end: slot.end,
+          extendedProps: {
+            ...task,
+            isTask: true,
+            scheduledStart: slot.start,
+            scheduledEnd: slot.end
+          },
+          backgroundColor: task.priority === 'URGENT' ? '#ef4444' : 
+                         task.priority === 'HIGH' ? '#f97316' :
+                         task.priority === 'MEDIUM' ? '#eab308' : '#22c55e',
+          borderColor: 'transparent',
+          textColor: 'white',
+          className: `task-event priority-${task.priority.toLowerCase()}`
+        };
+        
+        scheduledTasks.push(taskEvent);
+      }
+
+      // Combine and set events
+      combineAndSetEvents(calendarEvents, scheduledTasks);
+      
+      // Close the edit dialog
+      setIsEditDialogOpen(false);
+      setSelectedTask(null);
+      
+      // Ensure we're using the calendar API instance
+      if (api) {
+        // Only change view if it's different from the current one
+        if (api.view.type !== currentCalendarView) {
+          api.changeView(currentCalendarView);
+        }
+        
+        // Update the current view state
+        setCurrentView(currentCalendarView);
+        
+        // If it's a time grid view, scroll to current time
+        if (currentCalendarView === 'timeGridWeek' || currentCalendarView === 'timeGridDay') {
+          scrollToCurrentTime();
+        }
+      }
+      
+      // Increment refresh key to trigger any other necessary updates
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error refreshing calendar after task update:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchGoogleEvents, scrollToCurrentTime, currentView]);
 
   const handleContainerClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -356,28 +458,6 @@ const CalendarView: React.FC = () => {
     }
     return null;
   };
-
-  const scrollToCurrentTime = () => {
-    if (calendarRef.current) {
-      const calendarApi = calendarRef.current.getApi();
-      const now = new Date();
-      const scrollTime = {
-        hours: now.getHours(),
-        minutes: now.getMinutes(),
-        seconds: 0
-      };
-
-      setTimeout(() => {
-        calendarApi.scrollToTime(scrollTime);
-      }, 100);
-    }
-  };
-
-  useEffect(() => {
-    if (currentView === 'timeGridWeek' || currentView === 'timeGridDay') {
-      scrollToCurrentTime();
-    }
-  }, [currentView]);
 
   const renderEventContent = (eventInfo: any) => {
     const isGoogleEvent = eventInfo.event.extendedProps.isGoogleEvent || 
@@ -467,9 +547,7 @@ const CalendarView: React.FC = () => {
       </div>
       <TaskList 
         refreshTrigger={refreshKey} 
-        onTaskUpdate={() => {
-          setRefreshKey(prev => prev + 1);
-        }}
+        onTaskUpdate={handleTaskUpdate}
         editingTask={selectedTask}
         isEditDialogOpen={isEditDialogOpen}
         setIsEditDialogOpen={setIsEditDialogOpen}
