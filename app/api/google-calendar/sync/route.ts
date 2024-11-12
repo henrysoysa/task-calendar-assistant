@@ -1,50 +1,74 @@
 import { NextResponse } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
-import { prisma } from '../../../../lib/prisma';
-import { NextRequest } from 'next/server';
 import { google } from 'googleapis';
+import { prisma } from '@/lib/prisma';
+import { auth } from '@clerk/nextjs';
 
-export async function POST(request: NextRequest) {
-  const { userId } = getAuth(request);
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function POST() {
   try {
-    const credentials = await prisma.googleCalendarCredentials.findUnique({
-      where: { userId },
+    const { userId } = auth();
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's Google credentials from your database
+    const credentials = await prisma.googleCalendarCredentials.findFirst({
+      where: { userId: userId },
     });
 
     if (!credentials) {
-      return NextResponse.json(
-        { error: 'Google Calendar not connected' },
-        { status: 404 }
-      );
+      return NextResponse.json({ 
+        error: 'Google Calendar not connected', 
+        needsReconnect: true 
+      }, { status: 401 });
     }
 
-    // Initialize Google Calendar API
+    const { accessToken, refreshToken, expiryDate } = credentials;
+
+    if (!accessToken) {
+      return NextResponse.json({ 
+        error: 'No access token available', 
+        needsReconnect: true 
+      }, { status: 401 });
+    }
+
     const oauth2Client = new google.auth.OAuth2(
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      process.env.GOOGLE_CLIENT_ID!,
+      process.env.GOOGLE_CLIENT_SECRET!,
+      process.env.GOOGLE_REDIRECT_URI!
     );
 
+    // Set initial credentials
     oauth2Client.setCredentials({
-      access_token: credentials.accessToken,
-      refresh_token: credentials.refreshToken || undefined,
+      access_token: accessToken,
+      refresh_token: refreshToken || undefined,
+      expiry_date: expiryDate ? expiryDate.getTime() : undefined,
     });
 
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
     try {
-      // Get events from primary calendar for the next 30 days
+      // Try to refresh the token if we have a refresh token
+      if (refreshToken) {
+        const { tokens } = await oauth2Client.refreshAccessToken();
+        await prisma.googleCalendarCredentials.update({
+          where: { id: credentials.id },
+          data: {
+            accessToken: tokens.access_token!,
+            refreshToken: tokens.refresh_token || refreshToken,
+            expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+            lastSyncedAt: new Date(),
+          },
+        });
+        oauth2Client.setCredentials(tokens);
+      }
+
+      const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
       const now = new Date();
-      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const oneMonthFromNow = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
       const response = await calendar.events.list({
         calendarId: 'primary',
         timeMin: now.toISOString(),
-        timeMax: thirtyDaysFromNow.toISOString(),
+        timeMax: oneMonthFromNow.toISOString(),
         maxResults: 100,
         singleEvents: true,
         orderBy: 'startTime',
@@ -52,75 +76,62 @@ export async function POST(request: NextRequest) {
 
       const events = response.data.items;
 
-      if (!events || events.length === 0) {
-        await prisma.googleCalendarCredentials.update({
-          where: { userId },
-          data: { lastSyncedAt: new Date() },
-        });
-
-        return NextResponse.json({ 
-          success: true, 
-          eventsCount: 0 
-        });
+      // Save events to database
+      if (events) {
+        for (const event of events) {
+          await prisma.googleCalendarEvent.upsert({
+            where: {
+              googleEventId: event.id!,
+            },
+            update: {
+              title: event.summary || 'Untitled Event',
+              description: event.description || '',
+              startTime: new Date(event.start?.dateTime || event.start?.date || ''),
+              endTime: new Date(event.end?.dateTime || event.end?.date || ''),
+              isAllDay: !event.start?.dateTime,
+              updatedAt: new Date(),
+            },
+            create: {
+              googleEventId: event.id!,
+              credentialsId: credentials.id,
+              title: event.summary || 'Untitled Event',
+              description: event.description || '',
+              startTime: new Date(event.start?.dateTime || event.start?.date || ''),
+              endTime: new Date(event.end?.dateTime || event.end?.date || ''),
+              isAllDay: !event.start?.dateTime,
+            },
+          });
+        }
       }
 
-      // Delete existing events in a transaction
-      await prisma.$transaction(async (tx) => {
-        await tx.googleCalendarEvent.deleteMany({
-          where: { credentialsId: credentials.id },
-        });
-
-        // Create new events
-        for (const event of events) {
-          if (event.id && (event.start?.dateTime || event.start?.date)) {
-            const startTime = event.start.dateTime 
-              ? new Date(event.start.dateTime)
-              : new Date(event.start.date!);
-            
-            const endTime = event.end?.dateTime
-              ? new Date(event.end.dateTime)
-              : new Date(event.end?.date!);
-
-            await tx.googleCalendarEvent.create({
-              data: {
-                googleEventId: event.id,
-                title: event.summary || 'Untitled Event',
-                description: event.description || '',
-                startTime,
-                endTime,
-                isAllDay: !event.start.dateTime,
-                isRecurring: !!event.recurringEventId,
-                recurringEventId: event.recurringEventId || null,
-                credentialsId: credentials.id,
-              },
-            });
-          }
-        }
-
-        await tx.googleCalendarCredentials.update({
-          where: { userId },
-          data: { lastSyncedAt: new Date() },
-        });
+      // Update the lastSyncedAt in the database
+      await prisma.googleCalendarCredentials.update({
+        where: { id: credentials.id },
+        data: {
+          lastSyncedAt: now,
+        },
       });
 
       return NextResponse.json({ 
-        success: true, 
-        eventsCount: events.length 
+        message: 'Calendar synced successfully', 
+        events,
+        lastSynced: now.toISOString()
       });
-
-    } catch (error) {
-      console.error('Error fetching Google Calendar events:', error);
+    } catch (error: any) {
+      // Check if the error is due to invalid credentials
+      if (error.response?.status === 401) {
+        return NextResponse.json({ 
+          error: 'Invalid credentials', 
+          needsReconnect: true 
+        }, { status: 401 });
+      }
       throw error;
     }
-
   } catch (error) {
     console.error('Error syncing calendar:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to sync', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ 
+      error: 'Failed to sync calendar',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 } 

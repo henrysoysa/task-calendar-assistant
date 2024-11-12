@@ -48,11 +48,17 @@ model Task {
 }
 
 model Event {
-  id     Int      @id @default(autoincrement())
-  userId String
-  title  String
-  start  DateTime
-  end    DateTime
+  id                   String    @id @default(cuid())
+  googleCalendarEventId String?  @unique
+  userId               String
+  title                String
+  description         String?
+  startTime           DateTime
+  endTime             DateTime
+  isAllDay            Boolean   @default(false)
+  lastSynced          DateTime
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 // Add Google Calendar models
@@ -84,4 +90,14 @@ model GoogleCalendarEvent {
   credentials     GoogleCalendarCredentials @relation(fields: [credentialsId], references: [id], onDelete: Cascade)
 
   @@index([credentialsId])
+}
+
+model GoogleAccount {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  accessToken String
+  refreshToken String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }

@@ -143,13 +143,31 @@ const GoogleCalendarIntegration: React.FC = () => {
       setIsLoading(true);
       const response = await fetch('/api/google-calendar/sync', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (response.ok) {
-        setLastSync(new Date());
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401 && data.needsReconnect) {
+          console.log('Need to reconnect Google Calendar');
+          // Handle reconnection flow
+          return;
+        }
+        throw new Error(data.error || 'Failed to sync calendar');
       }
+
+      // Update last sync time
+      if (data.lastSynced) {
+        setLastSync(new Date(data.lastSynced));
+      }
+
+      console.log('Calendar synced successfully:', data);
     } catch (error) {
       console.error('Error syncing calendar:', error);
+      // Handle error appropriately
     } finally {
       setIsLoading(false);
     }
@@ -162,9 +180,9 @@ const GoogleCalendarIntegration: React.FC = () => {
           <Calendar className="h-5 w-5 text-violet-500" />
           <h2 className="text-lg font-semibold">Google Calendar</h2>
         </div>
-        {isConnected && (
+        {isConnected && lastSync && (
           <span className="text-xs text-gray-500">
-            Last synced: {lastSync?.toLocaleString() || 'Never'}
+            Last synced: {lastSync.toLocaleString()}
           </span>
         )}
       </div>
