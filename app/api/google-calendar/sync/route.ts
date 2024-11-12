@@ -60,16 +60,10 @@ export async function POST() {
           },
         });
 
-        // Update oauth2Client with new credentials
-        oauth2Client.setCredentials({
-          access_token: newCredentials.access_token,
-          refresh_token: newCredentials.refresh_token || refreshToken,
-          expiry_date: newCredentials.expiry_date
-        });
+        oauth2Client.setCredentials(newCredentials);
       }
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
       const now = new Date();
       const oneMonthFromNow = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
@@ -84,7 +78,6 @@ export async function POST() {
 
       const events = response.data.items;
 
-      // Save events to database
       if (events) {
         // First, delete old events
         await prisma.googleCalendarEvent.deleteMany({
@@ -93,33 +86,39 @@ export async function POST() {
 
         // Then save new events
         for (const event of events) {
-          if (!event.start || !event.end) continue;
+          if (!event.start || !event.end || !event.id) continue;
 
           const isAllDay = Boolean(event.start.date);
           let startTime: Date, endTime: Date;
 
           if (isAllDay) {
-            startTime = new Date(event.start.date + 'T00:00:00');
-            const endDate = new Date(event.end.date + 'T00:00:00');
-            endTime = new Date(endDate.setDate(endDate.getDate() - 1));
+            // For all-day events, just use the date strings without time
+            startTime = new Date(event.start.date);
+            endTime = new Date(event.end.date);
           } else {
+            // For regular events, use the dateTime
             startTime = new Date(event.start.dateTime || event.start.date || '');
             endTime = new Date(event.end.dateTime || event.end.date || '');
           }
 
-          await prisma.googleCalendarEvent.create({
-            data: {
-              credentialsId: credentials.id,
-              googleEventId: event.id || '',
-              title: event.summary || 'Untitled Event',
-              description: event.description || '',
-              startTime,
-              endTime,
-              isAllDay,
-              isRecurring: Boolean(event.recurringEventId),
-              recurringEventId: event.recurringEventId || null,
-            },
-          });
+          try {
+            await prisma.googleCalendarEvent.create({
+              data: {
+                credentialsId: credentials.id,
+                googleEventId: event.id,
+                title: event.summary || 'Untitled Event',
+                description: event.description || '',
+                startTime,
+                endTime,
+                isAllDay,
+                isRecurring: Boolean(event.recurringEventId),
+                recurringEventId: event.recurringEventId || null,
+              },
+            });
+          } catch (error) {
+            console.error('Error saving event:', event.id, error);
+            continue;
+          }
         }
       }
 
