@@ -15,7 +15,7 @@ import {
 
 const WORKING_HOURS = {
   start: 9,
-  end: 18,
+  end: 17,
   workingDays: [1, 2, 3, 4, 5]
 };
 

@@ -1,0 +1,51 @@
+.calendar-container {
+  height: 600px;
+  overflow: hidden;
+}
+
+/* Target the time grid scroller */
+.fc .fc-scroller {
+  height: 400px !important;
+  overflow-y: auto !important;
+}
+
+/* Make the time grid header sticky */
+.fc .fc-timegrid-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: white;
+}
+
+/* Ensure the time slots are properly sized */
+.fc .fc-timegrid-slot {
+  height: 40px !important;
+}
+
+/* Custom scrollbar styling */
+.fc .fc-scroller::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fc .fc-scroller::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.fc .fc-scroller::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.fc .fc-scroller::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Ensure the time grid maintains proper layout */
+.fc .fc-timegrid-body {
+  overflow: visible !important;
+}
+
+/* Fix for the scrolling container */
+.fc .fc-scroller-harness {
+  overflow: hidden !important;
+} 
