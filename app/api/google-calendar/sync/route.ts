@@ -86,19 +86,49 @@ export async function POST() {
 
         // Then save new events
         for (const event of events) {
+          // Skip events without required data
           if (!event.start || !event.end || !event.id) continue;
 
           const isAllDay = Boolean(event.start.date);
           let startTime: Date, endTime: Date;
 
           if (isAllDay) {
-            // For all-day events, just use the date strings without time
-            startTime = new Date(event.start.date);
-            endTime = new Date(event.end.date);
+            // Ensure we have date strings for all-day events
+            if (!event.start.date || !event.end.date) continue;
+            
+            try {
+              startTime = new Date(event.start.date);
+              endTime = new Date(event.end.date);
+
+              // Validate the dates
+              if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                console.error('Invalid date for event:', event.id);
+                continue;
+              }
+            } catch (error) {
+              console.error('Error parsing dates for event:', event.id, error);
+              continue;
+            }
           } else {
-            // For regular events, use the dateTime
-            startTime = new Date(event.start.dateTime || event.start.date || '');
-            endTime = new Date(event.end.dateTime || event.end.date || '');
+            // For regular events, use dateTime with fallback
+            const startDateTime = event.start.dateTime || event.start.date;
+            const endDateTime = event.end.dateTime || event.end.date;
+
+            if (!startDateTime || !endDateTime) continue;
+
+            try {
+              startTime = new Date(startDateTime);
+              endTime = new Date(endDateTime);
+
+              // Validate the dates
+              if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+                console.error('Invalid datetime for event:', event.id);
+                continue;
+              }
+            } catch (error) {
+              console.error('Error parsing datetimes for event:', event.id, error);
+              continue;
+            }
           }
 
           try {

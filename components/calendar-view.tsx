@@ -28,8 +28,9 @@ import { scheduleTask, needsRescheduling } from '../lib/scheduling';
 import { useUser } from '@clerk/nextjs';
 import GoogleCalendarIntegration from './google-calendar-integration';
 
-interface TaskWithPriority {
+interface Task {
   priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
+  deadline: string | Date;
 }
 
 const CalendarView: React.FC = () => {
@@ -187,14 +188,12 @@ const CalendarView: React.FC = () => {
 
         const sortedTasks = tasksData
           .filter((task: any) => task.status !== 'COMPLETED')
-          .sort((a: TaskWithPriority, b: TaskWithPriority) => {
-            const priorityOrder = {
-              'URGENT': 0,
-              'HIGH': 1,
-              'MEDIUM': 2,
-              'LOW': 3
-            } as const;
-            return priorityOrder[a.priority] - priorityOrder[b.priority];
+          .sort((a: Task, b: Task) => {
+            const priorityOrder = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+            if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+              return priorityOrder[a.priority] - priorityOrder[b.priority];
+            }
+            return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
           });
 
         const taskEvents = [];
@@ -320,8 +319,8 @@ const CalendarView: React.FC = () => {
       // Sort tasks by priority and deadline
       const sortedTasks = tasksData
         .filter((task: any) => task.status !== 'COMPLETED')
-        .sort((a: any, b: any) => {
-          const priorityOrder = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        .sort((a: Task, b: Task) => {
+          const priorityOrder = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
           if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
             return priorityOrder[a.priority] - priorityOrder[b.priority];
           }
