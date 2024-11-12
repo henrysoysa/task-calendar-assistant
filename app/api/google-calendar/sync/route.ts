@@ -79,26 +79,41 @@ export async function POST() {
       // Save events to database
       if (events) {
         for (const event of events) {
+          const isAllDay = Boolean(event.start?.date);
+          let startTime, endTime;
+
+          if (isAllDay) {
+            // For all-day events, use the date string directly
+            startTime = new Date(event.start.date);
+            // For all-day events, the end date is exclusive, so subtract one day
+            endTime = new Date(event.end.date);
+            endTime.setDate(endTime.getDate() - 1);
+          } else {
+            // For regular events, use dateTime
+            startTime = new Date(event.start.dateTime || event.start.date);
+            endTime = new Date(event.end.dateTime || event.end.date);
+          }
+
           await prisma.googleCalendarEvent.upsert({
             where: {
-              googleEventId: event.id!,
+              googleEventId: event.id,
             },
             update: {
               title: event.summary || 'Untitled Event',
               description: event.description || '',
-              startTime: new Date(event.start?.dateTime || event.start?.date || ''),
-              endTime: new Date(event.end?.dateTime || event.end?.date || ''),
-              isAllDay: !event.start?.dateTime,
+              startTime,
+              endTime,
+              isAllDay,
               updatedAt: new Date(),
             },
             create: {
-              googleEventId: event.id!,
+              googleEventId: event.id,
               credentialsId: credentials.id,
               title: event.summary || 'Untitled Event',
               description: event.description || '',
-              startTime: new Date(event.start?.dateTime || event.start?.date || ''),
-              endTime: new Date(event.end?.dateTime || event.end?.date || ''),
-              isAllDay: !event.start?.dateTime,
+              startTime,
+              endTime,
+              isAllDay,
             },
           });
         }

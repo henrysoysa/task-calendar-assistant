@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -128,33 +128,26 @@ const CalendarView: React.FC = () => {
   const fetchGoogleEvents = async () => {
     try {
       const response = await fetch('/api/google-calendar/events');
-      if (response.ok) {
-        const events = await response.json();
-        console.log('Fetched Google Calendar events:', events);
-
-        if (Array.isArray(events)) {
-          const formattedEvents = events.map(event => ({
-            id: `google-${event.googleCalendarEventId}`,
-            title: event.title,
-            start: new Date(event.startTime),
-            end: new Date(event.endTime),
-            allDay: event.isAllDay,
-            extendedProps: {
-              ...event,
-              isGoogleEvent: true
-            },
-            backgroundColor: 'rgb(66, 133, 244)',
-            borderColor: 'rgb(66, 133, 244)',
-            textColor: 'white',
-            className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
-          }));
-
-          console.log('Formatted Google events:', formattedEvents);
-          setGoogleEvents(formattedEvents);
-          return formattedEvents;
-        }
-      }
-      return [];
+      if (!response.ok) return [];
+      
+      const events = await response.json();
+      console.log('Fetched Google Calendar events:', events);
+      
+      return events.map((event: any) => ({
+        id: `google-${event.googleCalendarEventId}`,
+        title: event.title,
+        start: event.isAllDay ? event.startTime.split('T')[0] : new Date(event.startTime),
+        end: event.isAllDay ? event.endTime.split('T')[0] : new Date(event.endTime),
+        allDay: event.isAllDay,
+        extendedProps: {
+          isGoogleEvent: true,
+          description: event.description
+        },
+        backgroundColor: 'rgb(66, 133, 244)',
+        borderColor: 'rgb(66, 133, 244)',
+        textColor: 'white',
+        className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
+      }));
     } catch (error) {
       console.error('Error fetching Google Calendar events:', error);
       return [];
@@ -250,7 +243,9 @@ const CalendarView: React.FC = () => {
     setEvents(combinedEvents);
   };
 
-  const loadAllEvents = async () => {
+  const loadAllEvents = useCallback(async () => {
+    if (!user) return;
+    
     setIsLoading(true);
     try {
       const calendarEvents = await fetchGoogleEvents();
@@ -261,14 +256,14 @@ const CalendarView: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       console.log('Starting initial load...');
       loadAllEvents();
     }
-  }, [user, refreshKey]);
+  }, [user, loadAllEvents]);
 
   const handleTaskUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -302,7 +297,7 @@ const CalendarView: React.FC = () => {
       setCurrentView(api.view.type);
       
       if (view === 'timeGridWeek' || view === 'timeGridDay') {
-        setTimeout(scrollToCurrentTime, 100);
+        scrollToCurrentTime();
       }
     }
   };
@@ -348,18 +343,16 @@ const CalendarView: React.FC = () => {
   const scrollToCurrentTime = () => {
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
-      const currentView = calendarApi.view;
+      const now = new Date();
+      const scrollTime = {
+        hours: now.getHours(),
+        minutes: now.getMinutes(),
+        seconds: 0
+      };
 
-      if (currentView.type === 'timeGridWeek' || currentView.type === 'timeGridDay') {
-        const now = new Date();
-        const scrollTime = {
-          hours: now.getHours(),
-          minutes: Math.max(0, now.getMinutes() - 30),
-          seconds: 0
-        };
-        
+      setTimeout(() => {
         calendarApi.scrollToTime(scrollTime);
-      }
+      }, 100);
     }
   };
 
@@ -382,6 +375,12 @@ const CalendarView: React.FC = () => {
     );
   };
 
+  const handleDatesSet = () => {
+    if (currentView === 'timeGridWeek' || currentView === 'timeGridDay') {
+      scrollToCurrentTime();
+    }
+  };
+
   return (
     <div className="container mx-auto p-4" onClick={handleContainerClick}>
       <div className="mb-4 flex flex-col sm:flex-row sm:justify-between gap-2">
@@ -400,6 +399,7 @@ const CalendarView: React.FC = () => {
           </div>
         ) : (
           <FullCalendar
+            ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView={currentView}
             events={events}
@@ -417,6 +417,10 @@ const CalendarView: React.FC = () => {
             eventContent={renderEventContent}
             allDaySlot={true}
             allDayText="All Day"
+            nowIndicator={true}
+            now={new Date()}
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
             views={{
               dayGridMonth: {
                 dayMaxEventRows: 2,
@@ -424,25 +428,28 @@ const CalendarView: React.FC = () => {
                 moreLinkClick: 'day'
               },
               timeGridWeek: {
+                nowIndicator: true,
                 allDaySlot: true,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00',
               },
               timeGridDay: {
+                nowIndicator: true,
                 allDaySlot: true,
                 dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00',
               }
             }}
+            datesSet={handleDatesSet}
+            scrollTime={`${new Date().getHours()}:${new Date().getMinutes()}:00`}
           />
         )}
       </div>
       <TaskList 
         refreshTrigger={refreshKey} 
         onTaskUpdate={() => {
-          fetchTasks();
           setRefreshKey(prev => prev + 1);
         }}
         editingTask={selectedTask}
@@ -452,110 +459,111 @@ const CalendarView: React.FC = () => {
       />
 
       <style jsx global>{`
-        /* Calendar Container */
-        .fc {
-          background-color: white;
+        /* Calendar Layout */
+        .calendar-wrapper {
+          height: 700px;
+          display: flex;
+          flex-direction: column;
+          background: rgb(249, 250, 251);
           border-radius: 0.5rem;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
           padding: 1rem;
         }
 
-        /* Header Buttons */
-        .fc .fc-button-primary {
-          background-color: rgb(139, 92, 246) !important; /* violet-500 */
-          border-color: rgb(124, 58, 237) !important; /* violet-600 */
-          transition: all 0.2s;
+        /* Time grid specific */
+        .fc-timegrid-body {
+          height: 600px !important;
+          overflow-y: auto !important;
+          background: rgb(249, 250, 251);
         }
 
-        .fc .fc-button-primary:hover {
-          background-color: rgb(99, 102, 241) !important; /* indigo-500 */
-          border-color: rgb(79, 70, 229) !important; /* indigo-600 */
+        /* Ensure the time grid is scrollable */
+        .fc .fc-timegrid-body .fc-scroller {
+          height: 100% !important;
+          overflow-y: auto !important;
+          background: rgb(249, 250, 251);
         }
 
-        .fc .fc-button-primary:disabled {
-          background-color: rgb(196, 181, 253) !important; /* violet-300 */
-          border-color: rgb(167, 139, 250) !important; /* violet-400 */
+        /* Header styles */
+        .fc-header-toolbar {
+          padding: 0.5rem;
+          margin-bottom: 0.5rem !important;
+          background: rgb(249, 250, 251);
         }
 
-        .fc .fc-button-active {
-          background-color: rgb(14, 165, 233) !important; /* sky-500 */
-          border-color: rgb(2, 132, 199) !important; /* sky-600 */
+        /* Calendar background */
+        .fc {
+          background: rgb(249, 250, 251);
         }
 
-        /* Today Button */
-        .fc .fc-today-button {
-          background-color: rgb(244, 114, 182) !important; /* fuchsia-400 */
-          border-color: rgb(236, 72, 153) !important; /* fuchsia-500 */
+        .fc-view-harness {
+          background: rgb(249, 250, 251);
         }
 
-        /* Selected Event */
-        .selected-event {
-          border: 2px solid rgb(139, 92, 246) !important; /* violet-500 */
-          background-color: rgba(139, 92, 246, 0.1) !important;
-          box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
+        .fc-timegrid-slot {
+          background: rgb(249, 250, 251) !important;
         }
 
-        /* Calendar Events */
-        .fc-event {
-          border-radius: 0.25rem;
-          transition: all 0.2s ease-in-out;
-          border: 1px solid transparent;
+        .fc-timegrid-col.fc-day {
+          background: rgb(249, 250, 251);
         }
 
-        .fc-event:hover {
-          box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2); /* indigo-500 */
-          transform: translateY(-1px);
+        .fc-timegrid-slot-label {
+          background: rgb(249, 250, 251) !important;
         }
 
-        /* Today's Date Highlight */
-        .fc .fc-day-today {
-          background-color: rgba(14, 165, 233, 0.05) !important; /* sky-500 */
+        /* Now indicator */
+        .fc .fc-timegrid-now-indicator-line {
+          border-color: #ef4444;
+          border-width: 2px;
         }
 
-        /* Event Priority Colors */
-        .fc-event.priority-urgent {
-          background-color: rgb(244, 63, 94) !important; /* rose-500 */
-          border-color: rgb(225, 29, 72) !important; /* rose-600 */
+        .fc .fc-timegrid-now-indicator-arrow {
+          border-color: #ef4444;
+          border-width: 5px;
         }
 
-        .fc-event.priority-high {
-          background-color: rgb(236, 72, 153) !important; /* fuchsia-500 */
-          border-color: rgb(219, 39, 119) !important; /* fuchsia-600 */
+        /* Scrollbar styling */
+        .fc .fc-scroller::-webkit-scrollbar {
+          width: 8px;
         }
 
-        .fc-event.priority-medium {
-          background-color: rgb(99, 102, 241) !important; /* indigo-500 */
-          border-color: rgb(79, 70, 229) !important; /* indigo-600 */
+        .fc .fc-scroller::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
         }
 
-        .fc-event.priority-low {
-          background-color: rgb(14, 165, 233) !important; /* sky-500 */
-          border-color: rgb(2, 132, 199) !important; /* sky-600 */
+        .fc .fc-scroller::-webkit-scrollbar-thumb {
+          background: #888;
+          border-radius: 4px;
         }
 
-        /* Calendar Grid */
-        .fc th {
-          padding: 0.75rem 0;
-          font-weight: 600;
-          color: rgb(109, 40, 217); /* violet-700 */
+        .fc .fc-scroller::-webkit-scrollbar-thumb:hover {
+          background: #555;
         }
 
-        .fc td {
-          border-color: rgb(237, 233, 254); /* violet-100 */
-        }
-
-        /* Time Grid */
-        .fc .fc-timegrid-slot {
-          height: 3rem;
-          border-color: rgb(237, 233, 254); /* violet-100 */
-        }
-
-        /* Mobile Adjustments */
+        /* Mobile adjustments */
         @media (max-width: 620px) {
-          .fc .fc-toolbar-title {
-            font-size: 1.2rem;
-            color: rgb(139, 92, 246); /* violet-500 */
+          .calendar-wrapper {
+            height: 600px;
           }
+        }
+
+        /* Grid lines */
+        .fc-timegrid-slot {
+          border-color: #e5e7eb !important;
+        }
+
+        .fc-timegrid-slot-lane {
+          border-color: #e5e7eb !important;
+        }
+
+        .fc-scrollgrid {
+          border-color: #e5e7eb !important;
+        }
+
+        .fc th, .fc td {
+          border-color: #e5e7eb !important;
         }
       `}</style>
     </div>
