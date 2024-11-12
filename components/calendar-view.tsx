@@ -137,6 +137,18 @@ const CalendarView: React.FC = () => {
         const startDate = new Date(event.startTime);
         const endDate = new Date(event.endTime);
         
+        const commonStyles = {
+          backgroundColor: 'rgb(66, 133, 244)',  // Google Calendar blue
+          borderColor: 'rgb(66, 133, 244)',
+          textColor: 'white',
+          className: [
+            'google-calendar-event',
+            event.isAllDay ? 'all-day-event' : '',
+            'fc-event'
+          ].filter(Boolean).join(' '),
+          display: 'block',
+        };
+        
         return {
           id: `google-${event.googleEventId}`,
           title: event.title,
@@ -147,12 +159,10 @@ const CalendarView: React.FC = () => {
             isGoogleEvent: true,
             description: event.description,
             isRecurring: event.isRecurring,
-            recurringEventId: event.recurringEventId
+            recurringEventId: event.recurringEventId,
+            source: 'google'  // Add a source identifier
           },
-          backgroundColor: 'rgb(66, 133, 244)',
-          borderColor: 'rgb(66, 133, 244)',
-          textColor: 'white',
-          className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
+          ...commonStyles  // Spread the common styles
         };
       });
     } catch (error) {
@@ -370,7 +380,8 @@ const CalendarView: React.FC = () => {
   }, [currentView]);
 
   const renderEventContent = (eventInfo: any) => {
-    const isGoogleEvent = eventInfo.event.extendedProps.isGoogleEvent;
+    const isGoogleEvent = eventInfo.event.extendedProps.isGoogleEvent || 
+                         eventInfo.event.extendedProps.source === 'google';
     
     return (
       <div className={`event-content ${isGoogleEvent ? 'google-event' : 'task-event'}`}>

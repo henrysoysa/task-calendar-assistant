@@ -45,19 +45,27 @@ export async function POST() {
     });
 
     try {
-      // Try to refresh the token if we have a refresh token
+      // Always try to refresh the token first
       if (refreshToken) {
-        const { tokens } = await oauth2Client.refreshAccessToken();
+        const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
+        
+        // Update credentials in database
         await prisma.googleCalendarCredentials.update({
           where: { id: credentials.id },
           data: {
-            accessToken: tokens.access_token!,
-            refreshToken: tokens.refresh_token || refreshToken,
-            expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+            accessToken: newCredentials.access_token!,
+            refreshToken: newCredentials.refresh_token || refreshToken,
+            expiryDate: newCredentials.expiry_date ? new Date(newCredentials.expiry_date) : null,
             lastSyncedAt: new Date(),
           },
         });
-        oauth2Client.setCredentials(tokens);
+
+        // Update oauth2Client with new credentials
+        oauth2Client.setCredentials({
+          access_token: newCredentials.access_token,
+          refresh_token: newCredentials.refresh_token || refreshToken,
+          expiry_date: newCredentials.expiry_date
+        });
       }
 
       const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -78,32 +86,31 @@ export async function POST() {
 
       // Save events to database
       if (events) {
-        // First, delete old events to prevent duplicates
+        // First, delete old events
         await prisma.googleCalendarEvent.deleteMany({
           where: { credentialsId: credentials.id }
         });
 
         // Then save new events
         for (const event of events) {
-          if (!event.start || !event.end) continue; // Skip events without start/end times
+          if (!event.start || !event.end) continue;
 
           const isAllDay = Boolean(event.start.date);
           let startTime: Date, endTime: Date;
 
           if (isAllDay) {
             startTime = new Date(event.start.date + 'T00:00:00');
-            // For all-day events, end date is exclusive, so subtract one day
             const endDate = new Date(event.end.date + 'T00:00:00');
             endTime = new Date(endDate.setDate(endDate.getDate() - 1));
           } else {
-            startTime = new Date(event.start.dateTime || event.start.date);
-            endTime = new Date(event.end.dateTime || event.end.date);
+            startTime = new Date(event.start.dateTime || event.start.date || '');
+            endTime = new Date(event.end.dateTime || event.end.date || '');
           }
 
           await prisma.googleCalendarEvent.create({
             data: {
-              googleEventId: event.id!,
               credentialsId: credentials.id,
+              googleEventId: event.id || '',
               title: event.summary || 'Untitled Event',
               description: event.description || '',
               startTime,
@@ -116,13 +123,7 @@ export async function POST() {
         }
       }
 
-      // Update last synced timestamp
-      await prisma.googleCalendarCredentials.update({
-        where: { id: credentials.id },
-        data: { lastSyncedAt: now },
-      });
-
-      // Fetch the saved events to return
+      // Fetch saved events to return
       const savedEvents = await prisma.googleCalendarEvent.findMany({
         where: { credentialsId: credentials.id }
       });
@@ -134,11 +135,11 @@ export async function POST() {
       });
 
     } catch (error: any) {
-      // Check if the error is due to invalid credentials
       if (error.response?.status === 401) {
         return NextResponse.json({ 
           error: 'Invalid credentials', 
-          needsReconnect: true 
+          needsReconnect: true,
+          details: error.message
         }, { status: 401 });
       }
       throw error;
