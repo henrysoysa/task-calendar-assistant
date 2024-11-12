@@ -79,28 +79,20 @@ export async function POST() {
       const events = response.data.items;
 
       if (events) {
-        // First, delete old events
-        await prisma.googleCalendarEvent.deleteMany({
-          where: { credentialsId: credentials.id }
-        });
-
-        // Then save new events
+        // Process each event
         for (const event of events) {
-          // Skip events without required data
           if (!event.start || !event.end || !event.id) continue;
 
           const isAllDay = Boolean(event.start.date);
           let startTime: Date, endTime: Date;
 
           if (isAllDay) {
-            // Ensure we have date strings for all-day events
             if (!event.start.date || !event.end.date) continue;
             
             try {
               startTime = new Date(event.start.date);
               endTime = new Date(event.end.date);
 
-              // Validate the dates
               if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
                 console.error('Invalid date for event:', event.id);
                 continue;
@@ -110,7 +102,6 @@ export async function POST() {
               continue;
             }
           } else {
-            // For regular events, use dateTime with fallback
             const startDateTime = event.start.dateTime || event.start.date;
             const endDateTime = event.end.dateTime || event.end.date;
 
@@ -120,7 +111,6 @@ export async function POST() {
               startTime = new Date(startDateTime);
               endTime = new Date(endDateTime);
 
-              // Validate the dates
               if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
                 console.error('Invalid datetime for event:', event.id);
                 continue;
@@ -132,10 +122,23 @@ export async function POST() {
           }
 
           try {
-            await prisma.googleCalendarEvent.create({
-              data: {
+            await prisma.googleCalendarEvent.upsert({
+              where: {
+                googleEventId: event.id
+              },
+              update: {
+                title: event.summary || 'Untitled Event',
+                description: event.description || '',
+                startTime,
+                endTime,
+                isAllDay,
+                isRecurring: Boolean(event.recurringEventId),
+                recurringEventId: event.recurringEventId || null,
                 credentialsId: credentials.id,
+              },
+              create: {
                 googleEventId: event.id,
+                credentialsId: credentials.id,
                 title: event.summary || 'Untitled Event',
                 description: event.description || '',
                 startTime,
