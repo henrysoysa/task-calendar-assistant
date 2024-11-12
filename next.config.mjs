@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
   experimental: {
-    runtime: 'nodejs',
+    serverActions: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   },
   env: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,

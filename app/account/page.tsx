@@ -5,12 +5,19 @@ import { useUser, SignedIn, SignedOut } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import PreferencesSection from '@/components/preferences-section';
 import GoogleCalendarIntegration from '@/components/google-calendar-integration';
+import { auth } from '@clerk/nextjs';
+import { redirect } from 'next/navigation';
 
 const AccountPage = () => {
   const { user, isLoaded } = useUser();
+  const { userId } = auth();
 
   if (!isLoaded) {
     return <div>Loading...</div>;
+  }
+
+  if (!userId) {
+    redirect('/sign-in');
   }
 
   return (
