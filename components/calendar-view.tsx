@@ -133,21 +133,28 @@ const CalendarView: React.FC = () => {
       const events = await response.json();
       console.log('Fetched Google Calendar events:', events);
       
-      return events.map((event: any) => ({
-        id: `google-${event.googleCalendarEventId}`,
-        title: event.title,
-        start: event.isAllDay ? event.startTime.split('T')[0] : new Date(event.startTime),
-        end: event.isAllDay ? event.endTime.split('T')[0] : new Date(event.endTime),
-        allDay: event.isAllDay,
-        extendedProps: {
-          isGoogleEvent: true,
-          description: event.description
-        },
-        backgroundColor: 'rgb(66, 133, 244)',
-        borderColor: 'rgb(66, 133, 244)',
-        textColor: 'white',
-        className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
-      }));
+      return events.map((event: any) => {
+        const startDate = new Date(event.startTime);
+        const endDate = new Date(event.endTime);
+        
+        return {
+          id: `google-${event.googleEventId}`,
+          title: event.title,
+          start: event.isAllDay ? startDate.toISOString().split('T')[0] : startDate,
+          end: event.isAllDay ? endDate.toISOString().split('T')[0] : endDate,
+          allDay: event.isAllDay,
+          extendedProps: {
+            isGoogleEvent: true,
+            description: event.description,
+            isRecurring: event.isRecurring,
+            recurringEventId: event.recurringEventId
+          },
+          backgroundColor: 'rgb(66, 133, 244)',
+          borderColor: 'rgb(66, 133, 244)',
+          textColor: 'white',
+          className: `google-calendar-event ${event.isAllDay ? 'all-day-event' : ''}`
+        };
+      });
     } catch (error) {
       console.error('Error fetching Google Calendar events:', error);
       return [];

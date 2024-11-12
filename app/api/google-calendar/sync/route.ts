@@ -78,60 +78,61 @@ export async function POST() {
 
       // Save events to database
       if (events) {
+        // First, delete old events to prevent duplicates
+        await prisma.googleCalendarEvent.deleteMany({
+          where: { credentialsId: credentials.id }
+        });
+
+        // Then save new events
         for (const event of events) {
-          const isAllDay = Boolean(event.start?.date);
-          let startTime, endTime;
+          if (!event.start || !event.end) continue; // Skip events without start/end times
+
+          const isAllDay = Boolean(event.start.date);
+          let startTime: Date, endTime: Date;
 
           if (isAllDay) {
-            // For all-day events, use the date string directly
-            startTime = new Date(event.start.date);
-            // For all-day events, the end date is exclusive, so subtract one day
-            endTime = new Date(event.end.date);
-            endTime.setDate(endTime.getDate() - 1);
+            startTime = new Date(event.start.date + 'T00:00:00');
+            // For all-day events, end date is exclusive, so subtract one day
+            const endDate = new Date(event.end.date + 'T00:00:00');
+            endTime = new Date(endDate.setDate(endDate.getDate() - 1));
           } else {
-            // For regular events, use dateTime
             startTime = new Date(event.start.dateTime || event.start.date);
             endTime = new Date(event.end.dateTime || event.end.date);
           }
 
-          await prisma.googleCalendarEvent.upsert({
-            where: {
-              googleEventId: event.id,
-            },
-            update: {
-              title: event.summary || 'Untitled Event',
-              description: event.description || '',
-              startTime,
-              endTime,
-              isAllDay,
-              updatedAt: new Date(),
-            },
-            create: {
-              googleEventId: event.id,
+          await prisma.googleCalendarEvent.create({
+            data: {
+              googleEventId: event.id!,
               credentialsId: credentials.id,
               title: event.summary || 'Untitled Event',
               description: event.description || '',
               startTime,
               endTime,
               isAllDay,
+              isRecurring: Boolean(event.recurringEventId),
+              recurringEventId: event.recurringEventId || null,
             },
           });
         }
       }
 
-      // Update the lastSyncedAt in the database
+      // Update last synced timestamp
       await prisma.googleCalendarCredentials.update({
         where: { id: credentials.id },
-        data: {
-          lastSyncedAt: now,
-        },
+        data: { lastSyncedAt: now },
       });
 
-      return NextResponse.json({ 
-        message: 'Calendar synced successfully', 
-        events,
+      // Fetch the saved events to return
+      const savedEvents = await prisma.googleCalendarEvent.findMany({
+        where: { credentialsId: credentials.id }
+      });
+
+      return NextResponse.json({
+        message: 'Calendar synced successfully',
+        events: savedEvents,
         lastSynced: now.toISOString()
       });
+
     } catch (error: any) {
       // Check if the error is due to invalid credentials
       if (error.response?.status === 401) {
@@ -144,7 +145,7 @@ export async function POST() {
     }
   } catch (error) {
     console.error('Error syncing calendar:', error);
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to sync calendar',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
