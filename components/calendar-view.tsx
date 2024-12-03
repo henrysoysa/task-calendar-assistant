@@ -49,6 +49,7 @@ const CalendarView: React.FC = () => {
   const calendarRef = useRef<FullCalendar | null>(null);
   const [lastScheduledDate, setLastScheduledDate] = useState<Date>(new Date());
   const [isLoading, setIsLoading] = useState(true);
+  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -478,189 +479,224 @@ const CalendarView: React.FC = () => {
     }
   };
 
+  const handleDateClick = useCallback((arg: any) => {
+    // Only handle double clicks
+    if (arg.jsEvent.detail === 2) {
+      // Check if we're in month view
+      if (calendarRef.current?.getApi().view.type === 'dayGridMonth') {
+        // Get the clicked date
+        const clickedDate = arg.date;
+        
+        // Change to day view
+        const api = calendarRef.current.getApi();
+        
+        // First go to the date
+        api.gotoDate(clickedDate);
+        
+        // Then change the view
+        setTimeout(() => {
+          api.changeView('timeGridDay');
+          setCurrentView('timeGridDay');
+          
+          // Scroll to business hours
+          setTimeout(scrollToCurrentTime, 100);
+        }, 0);
+      }
+    }
+  }, [scrollToCurrentTime]);
+
   return (
     <div className="container mx-auto p-4" onClick={handleContainerClick}>
-      <div className="mb-4 flex flex-col sm:flex-row sm:justify-between gap-2">
-        <div className="flex gap-2">
-          <AddEventButton onEventAdded={() => {
-            fetchTasks();
-            setRefreshKey(prev => prev + 1);
-          }} />
-          {windowWidth <= 620 && renderViewSelector()}
+      {!user ? (
+        <div className="flex justify-center items-center h-64">
+          <span className="text-gray-500">Please log in to access your calendar.</span>
         </div>
-      </div>
-      <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
-            <span className="text-gray-500">Loading calendar...</span>
+      ) : (
+        <>
+          <div className="mb-4 flex flex-col sm:flex-row sm:justify-between gap-2">
+            <div className="flex gap-2">
+              <AddEventButton onEventAdded={() => {
+                fetchTasks();
+                setRefreshKey(prev => prev + 1);
+              }} />
+              {windowWidth <= 620 && renderViewSelector()}
+            </div>
           </div>
-        ) : (
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView={currentView}
-            events={events}
-            eventClick={handleEventClick}
-            headerToolbar={windowWidth <= 620 ? {
-              left: 'title',
-              center: '',
-              right: 'prev,next,today'
-            } : {
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            }}
-            height="auto"
-            eventContent={renderEventContent}
-            allDaySlot={true}
-            allDayText="All Day"
-            nowIndicator={true}
-            now={new Date()}
-            slotMinTime="00:00:00"
-            slotMaxTime="24:00:00"
-            views={{
-              dayGridMonth: {
-                dayMaxEventRows: 2,
-                moreLinkText: count => `+${count} more`,
-                moreLinkClick: 'day'
-              },
-              timeGridWeek: {
-                nowIndicator: true,
-                allDaySlot: true,
-                dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
-                slotDuration: '00:30:00',
-                slotLabelInterval: '01:00',
-              },
-              timeGridDay: {
-                nowIndicator: true,
-                allDaySlot: true,
-                dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
-                slotDuration: '00:30:00',
-                slotLabelInterval: '01:00',
-              }
-            }}
-            datesSet={handleDatesSet}
-            scrollTime={`${new Date().getHours()}:${new Date().getMinutes()}:00`}
+          <div className={windowWidth <= 620 ? 'mobile-calendar' : ''}>
+            {isLoading ? (
+              <div className="flex justify-center items-center h-64">
+                <span className="text-gray-500">Loading calendar...</span>
+              </div>
+            ) : (
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView={currentView}
+                events={events}
+                eventClick={handleEventClick}
+                dateClick={handleDateClick}
+                headerToolbar={windowWidth <= 620 ? {
+                  left: 'title',
+                  center: '',
+                  right: 'prev,next,today'
+                } : {
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                }}
+                height="auto"
+                eventContent={renderEventContent}
+                allDaySlot={true}
+                allDayText="All Day"
+                nowIndicator={true}
+                now={new Date()}
+                slotMinTime="00:00:00"
+                slotMaxTime="24:00:00"
+                views={{
+                  dayGridMonth: {
+                    dayMaxEventRows: 2,
+                    moreLinkText: count => `+${count} more`,
+                    moreLinkClick: 'day'
+                  },
+                  timeGridWeek: {
+                    nowIndicator: true,
+                    allDaySlot: true,
+                    dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
+                    slotDuration: '00:30:00',
+                    slotLabelInterval: '01:00',
+                  },
+                  timeGridDay: {
+                    nowIndicator: true,
+                    allDaySlot: true,
+                    dayHeaderFormat: { weekday: 'long', month: 'long', day: 'numeric' },
+                    slotDuration: '00:30:00',
+                    slotLabelInterval: '01:00',
+                  }
+                }}
+                datesSet={handleDatesSet}
+                scrollTime={`${new Date().getHours()}:${new Date().getMinutes()}:00`}
+              />
+            )}
+          </div>
+          <TaskList 
+            refreshTrigger={refreshKey} 
+            onTaskUpdate={handleTaskUpdate}
+            editingTask={selectedTask}
+            isEditDialogOpen={isEditDialogOpen}
+            setIsEditDialogOpen={setIsEditDialogOpen}
+            setEditingTask={setSelectedTask}
           />
-        )}
-      </div>
-      <TaskList 
-        refreshTrigger={refreshKey} 
-        onTaskUpdate={handleTaskUpdate}
-        editingTask={selectedTask}
-        isEditDialogOpen={isEditDialogOpen}
-        setIsEditDialogOpen={setIsEditDialogOpen}
-        setEditingTask={setSelectedTask}
-      />
 
-      <style jsx global>{`
-        /* Calendar Layout */
-        .calendar-wrapper {
-          height: 700px;
-          display: flex;
-          flex-direction: column;
-          background: rgb(249, 250, 251);
-          border-radius: 0.5rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-          padding: 1rem;
-        }
+          <style jsx global>{`
+            /* Calendar Layout */
+            .calendar-wrapper {
+              height: 700px;
+              display: flex;
+              flex-direction: column;
+              background: rgb(249, 250, 251);
+              border-radius: 0.5rem;
+              box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+              padding: 1rem;
+            }
 
-        /* Time grid specific */
-        .fc-timegrid-body {
-          height: 600px !important;
-          overflow-y: auto !important;
-          background: rgb(249, 250, 251);
-        }
+            /* Time grid specific */
+            .fc-timegrid-body {
+              height: 600px !important;
+              overflow-y: auto !important;
+              background: rgb(249, 250, 251);
+            }
 
-        /* Ensure the time grid is scrollable */
-        .fc .fc-timegrid-body .fc-scroller {
-          height: 100% !important;
-          overflow-y: auto !important;
-          background: rgb(249, 250, 251);
-        }
+            /* Ensure the time grid is scrollable */
+            .fc .fc-timegrid-body .fc-scroller {
+              height: 100% !important;
+              overflow-y: auto !important;
+              background: rgb(249, 250, 251);
+            }
 
-        /* Header styles */
-        .fc-header-toolbar {
-          padding: 0.5rem;
-          margin-bottom: 0.5rem !important;
-          background: rgb(249, 250, 251);
-        }
+            /* Header styles */
+            .fc-header-toolbar {
+              padding: 0.5rem;
+              margin-bottom: 0.5rem !important;
+              background: rgb(249, 250, 251);
+            }
 
-        /* Calendar background */
-        .fc {
-          background: rgb(249, 250, 251);
-        }
+            /* Calendar background */
+            .fc {
+              background: rgb(249, 250, 251);
+            }
 
-        .fc-view-harness {
-          background: rgb(249, 250, 251);
-        }
+            .fc-view-harness {
+              background: rgb(249, 250, 251);
+            }
 
-        .fc-timegrid-slot {
-          background: rgb(249, 250, 251) !important;
-        }
+            .fc-timegrid-slot {
+              background: rgb(249, 250, 251) !important;
+            }
 
-        .fc-timegrid-col.fc-day {
-          background: rgb(249, 250, 251);
-        }
+            .fc-timegrid-col.fc-day {
+              background: rgb(249, 250, 251);
+            }
 
-        .fc-timegrid-slot-label {
-          background: rgb(249, 250, 251) !important;
-        }
+            .fc-timegrid-slot-label {
+              background: rgb(249, 250, 251) !important;
+            }
 
-        /* Now indicator */
-        .fc .fc-timegrid-now-indicator-line {
-          border-color: #ef4444;
-          border-width: 2px;
-        }
+            /* Now indicator */
+            .fc .fc-timegrid-now-indicator-line {
+              border-color: #ef4444;
+              border-width: 2px;
+            }
 
-        .fc .fc-timegrid-now-indicator-arrow {
-          border-color: #ef4444;
-          border-width: 5px;
-        }
+            .fc .fc-timegrid-now-indicator-arrow {
+              border-color: #ef4444;
+              border-width: 5px;
+            }
 
-        /* Scrollbar styling */
-        .fc .fc-scroller::-webkit-scrollbar {
-          width: 8px;
-        }
+            /* Scrollbar styling */
+            .fc .fc-scroller::-webkit-scrollbar {
+              width: 8px;
+            }
 
-        .fc .fc-scroller::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 4px;
-        }
+            .fc .fc-scroller::-webkit-scrollbar-track {
+              background: #f1f1f1;
+              border-radius: 4px;
+            }
 
-        .fc .fc-scroller::-webkit-scrollbar-thumb {
-          background: #888;
-          border-radius: 4px;
-        }
+            .fc .fc-scroller::-webkit-scrollbar-thumb {
+              background: #888;
+              border-radius: 4px;
+            }
 
-        .fc .fc-scroller::-webkit-scrollbar-thumb:hover {
-          background: #555;
-        }
+            .fc .fc-scroller::-webkit-scrollbar-thumb:hover {
+              background: #555;
+            }
 
-        /* Mobile adjustments */
-        @media (max-width: 620px) {
-          .calendar-wrapper {
-            height: 600px;
-          }
-        }
+            /* Mobile adjustments */
+            @media (max-width: 620px) {
+              .calendar-wrapper {
+                height: 600px;
+              }
+            }
 
-        /* Grid lines */
-        .fc-timegrid-slot {
-          border-color: #e5e7eb !important;
-        }
+            /* Grid lines */
+            .fc-timegrid-slot {
+              border-color: #e5e7eb !important;
+            }
 
-        .fc-timegrid-slot-lane {
-          border-color: #e5e7eb !important;
-        }
+            .fc-timegrid-slot-lane {
+              border-color: #e5e7eb !important;
+            }
 
-        .fc-scrollgrid {
-          border-color: #e5e7eb !important;
-        }
+            .fc-scrollgrid {
+              border-color: #e5e7eb !important;
+            }
 
-        .fc th, .fc td {
-          border-color: #e5e7eb !important;
-        }
-      `}</style>
+            .fc th, .fc td {
+              border-color: #e5e7eb !important;
+            }
+          `}</style>
+        </>
+      )}
     </div>
   );
 };
